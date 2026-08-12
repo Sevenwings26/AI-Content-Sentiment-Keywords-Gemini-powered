@@ -39,10 +39,10 @@ def get_db():
 
 # routes
 # get
-@app.get('/', response_class=HTMLResponse)
+@app.get('/content-generator', response_class=HTMLResponse)
 def read_root(request: Request):
     # render
-    return templates.TemplateResponse('index.html', {"request": request})
+    return templates.TemplateResponse('content_generator.html', {"request": request})
 
 # post 
 @app.post("/generate/")

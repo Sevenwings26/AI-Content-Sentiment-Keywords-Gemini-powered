@@ -143,6 +143,43 @@ The semaphore ensures that **only 5 threads** can access the Gemini API at a tim
 
 ---
 
+## 🐘 PostgreSQL Setup (Ubuntu/WSL)
+
+If you are using Ubuntu/WSL and want to set up the PostgreSQL database locally:
+
+1. **Install PostgreSQL:**
+   ```bash
+   sudo apt update
+   sudo apt install postgresql postgresql-contrib
+   ```
+
+2. **Start the PostgreSQL Service:**
+   ```bash
+   sudo service postgresql start
+   ```
+
+3. **Configure Database & User:**
+   Connect to PostgreSQL as the `postgres` superuser:
+   ```bash
+   sudo -i -u postgres psql
+   ```
+
+   Inside the `psql` console, run the following SQL commands to create the database, user, and grant the required privileges (matching the credentials in your `.env` file):
+   ```sql
+   CREATE DATABASE kurus_ai;
+   CREATE USER kurus_admin WITH PASSWORD 'Password#123';
+   GRANT ALL PRIVILEGES ON DATABASE kurus_ai TO kurus_admin;
+   
+   -- Connect to the new database to grant schema privileges (required for PostgreSQL 15+):
+   \c kurus_ai
+   GRANT ALL ON SCHEMA public TO kurus_admin;
+   
+   -- Exit the console
+   \q
+   ```
+
+---
+
 ## 🏡 Database Migration
 * Run on terminal:
   `pip install alembic`

@@ -79,19 +79,6 @@ def get_keywords(db: Session, content: str) -> str:
         return keywords_text
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Perform content summary
 def get_content_summary(content: str) -> str:
     prompt = (
