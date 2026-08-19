@@ -146,11 +146,24 @@ class RAGService:
             print(f"Error purging Qdrant vectors for session {session_id}: {e}")
             return False
 
-    def query_assistant(self, query: str, session_id: str, db: Session, top_k: int = 3) -> Tuple[str, List[Dict[str, Any]]]:
+    def query_assistant(self, query: str, session_id: str, db: Session, top_k: int = 3, score_threshold: float = 0.35) -> Tuple[str, List[Dict[str, Any]]]:
         """
-        Retrieves matching chunks from Qdrant with session-level filters, 
-        constructs the prompt context, and returns the LLM response.
+        Smart Query Routing Workflow:
+        1. Fast SQL Pre-Check: Checks if any documents are attached to session_id in PostgreSQL.
+           If empty, bypasses embedding calculation & Qdrant vector search entirely (0ms overhead).
+        2. Relevance Thresholding: Evaluates Qdrant point similarity scores.
+           If top score < score_threshold (0.35), ignores context and generates a general response.
         """
+        # --- Step 1: Fast SQL Pre-Check ---
+        from app.crud import rag_chat_crud
+        uploaded_docs = rag_chat_crud.get_chat_documents(db, session_id)
+        if not uploaded_docs:
+            # Fast path: No documents attached -> Skip Qdrant search & embedding calls completely
+            system_instruction = "You are a helpful personal assistant."
+            answer = self.llm.generate_text(query, system_instruction=system_instruction)
+            return answer, []
+
+        # --- Step 2: Vector Search & Relevance Thresholding ---
         query_embedding = self.llm.get_embeddings(query)
 
         session_filter = Filter(
@@ -162,7 +175,6 @@ class RAGService:
             ]
         )
 
-        # Updated Qdrant API call for qdrant-client 1.11+
         response = self.qdrant.query_points(
             collection_name=self.collection_name,
             query=query_embedding,
@@ -171,14 +183,19 @@ class RAGService:
         )
         results = response.points
 
-        if not results:
+        # Filter out points below similarity score threshold (e.g. 0.35)
+        relevant_results = [p for p in results if p.score >= score_threshold]
+
+        if not relevant_results:
+            # Relevance score below threshold -> Fall back to general unconstrained LLM response
             system_instruction = "You are a helpful personal assistant."
             answer = self.llm.generate_text(query, system_instruction=system_instruction)
             return answer, []
 
+        # --- Step 3: Grounded RAG Generation ---
         context_block = ""
         sources = []
-        for point in results:
+        for point in relevant_results:
             payload = point.payload
             context_block += f"Source File: {payload['filename']}\nContent: {payload['content']}\n\n---\n\n"
             sources.append({
@@ -186,7 +203,6 @@ class RAGService:
                 "preview": payload["content"][:150] + "..."
             })
 
-        # SYSTEM PROMPT
         system_instruction = (
             "You are a helpful personal knowledge assistant. Answer the user's question "
             "using ONLY the provided Context block. Be truthful and ground your answer. "
