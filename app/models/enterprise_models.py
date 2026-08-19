@@ -1,4 +1,4 @@
-# app/models/enterprise_models.py
+﻿# app/models/enterprise_models.py
 import enum
 import uuid
 from datetime import datetime
@@ -7,9 +7,10 @@ from sqlalchemy import (
     Column, String, Text, ForeignKey, DateTime, Boolean, 
     Enum, Index, Integer, JSON
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from app.database import Base
+
+Base = declarative_base()
 
 # --- Enums ---
 
@@ -31,6 +32,12 @@ class DocumentStatus(str, enum.Enum):
     INDEXED = "INDEXED"
     FAILED = "FAILED"
     ARCHIVED = "ARCHIVED"
+
+class IngestionJobStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 
 # --- Tenant & Organization Models ---
@@ -167,6 +174,31 @@ class EnterpriseChatMessage(Base):
     session = relationship("EnterpriseChatSession", back_populates="messages")
 
 
+class IngestionJob(Base):
+    """Admin-governed scheduled or on-demand data source sync rules."""
+    __tablename__ = "ingestion_jobs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    department_id = Column(String(36), ForeignKey("departments.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    name = Column(String(255), nullable=False)
+    source_type = Column(String(50), nullable=False) # 's3', 'relational_db', 'file'
+    access_level = Column(Enum(AccessLevel), default=AccessLevel.DEPARTMENT, nullable=False)
+    
+    # Store connection parameters (e.g. bucket_name, db_connection_url, sql_query, prefix)
+    connection_config = Column(JSON, nullable=False)
+    cron_schedule = Column(String(100), nullable=True) # e.g. '0 0 * * *' for daily sync
+    
+    status = Column(Enum(IngestionJobStatus), default=IngestionJobStatus.PENDING, nullable=False)
+    last_run_at = Column(DateTime, nullable=True)
+    documents_processed_count = Column(Integer, default=0, nullable=False)
+    error_message = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 # --- Immutable Audit Trail ---
 
 class AuditLog(Base):
@@ -186,4 +218,3 @@ class AuditLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     organization = relationship("Organization", back_populates="audit_logs")
-    
