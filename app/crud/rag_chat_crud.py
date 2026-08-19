@@ -51,3 +51,19 @@ def register_chat_document(db: Session, session_id: str, filename: str):
 
 def get_chat_documents(db: Session, session_id: str):
     return db.query(models.ChatDocument).filter(models.ChatDocument.session_id == session_id).all()
+
+def delete_chat_document(db: Session, session_id: str, filename: str) -> bool:
+    """Deletes a specific document metadata record for a session from PostgreSQL."""
+    doc = (
+        db.query(models.ChatDocument)
+        .filter(
+            models.ChatDocument.session_id == session_id,
+            models.ChatDocument.filename == filename
+        )
+        .first()
+    )
+    if doc:
+        db.delete(doc)
+        db.commit()
+        return True
+    return False

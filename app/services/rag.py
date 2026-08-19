@@ -146,6 +146,30 @@ class RAGService:
             print(f"Error purging Qdrant vectors for session {session_id}: {e}")
             return False
 
+    def delete_document_vectors(self, session_id: str, filename: str) -> bool:
+        """Purges vector chunks associated with a specific file within a session from Qdrant."""
+        try:
+            doc_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="session_id",
+                        match=MatchValue(value=session_id)
+                    ),
+                    FieldCondition(
+                        key="filename",
+                        match=MatchValue(value=filename)
+                    )
+                ]
+            )
+            self.qdrant.delete(
+                collection_name=self.collection_name,
+                points_selector=doc_filter
+            )
+            return True
+        except Exception as e:
+            print(f"Error purging Qdrant vectors for file {filename} in session {session_id}: {e}")
+            return False
+
     def query_assistant(self, query: str, session_id: str, db: Session, top_k: int = 3, score_threshold: float = 0.35) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Smart Query Routing Workflow:

@@ -151,3 +151,24 @@ async def delete_chat_session(
         return {"status": "success", "message": "Chat session and vector index deleted successfully."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# 6. Handle Document Deletion: "DELETE http://localhost:4500/chat/{session_id}/document/{filename}"
+@router.delete("/chat/{session_id}/document/{filename}")
+async def delete_document(
+    session_id: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    rag_service = Depends(get_rag_service)
+):
+    try:
+        # 1. Purge vector chunks from Qdrant for this specific file & session
+        rag_service.delete_document_vectors(session_id, filename)
+
+        # 2. Delete document metadata record from PostgreSQL
+        deleted = rag_chat_crud.delete_chat_document(db, session_id, filename)
+        if not deleted:
+            return {"status": "error", "message": "Document record not found."}
+
+        return {"status": "success", "message": f"Document '{filename}' and vector chunks removed successfully."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

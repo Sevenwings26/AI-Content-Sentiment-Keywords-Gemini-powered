@@ -301,6 +301,24 @@
             font-size: 14px;
         }
 
+        .remove-doc-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            padding: 2px 4px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            margin-left: 2px;
+        }
+
+        .remove-doc-btn:hover {
+            color: #e63946;
+            background-color: rgba(230, 57, 70, 0.15);
+        }
+
         .input-bar {
             display: flex;
             align-items: center;
@@ -440,6 +458,7 @@
                 <div class="file-pill">
                     <span class="file-pill-icon">📄</span>
                     <span class="file-pill-name" title="{{ doc.filename }}">{{ doc.filename }}</span>
+                    <button class="remove-doc-btn" onclick="deleteDocument('{{ doc.filename }}', this)" title="Remove document & vectors">✕</button>
                 </div>
                 {% endfor %}
                 {% endif %}
@@ -536,6 +555,7 @@
             pill.innerHTML = `
                 <span class="file-pill-icon">📄</span>
                 <span class="file-pill-name" title="${filename}">${filename}</span>
+                <button class="remove-doc-btn" onclick="deleteDocument('${filename}', this)" title="Remove document & vectors">✕</button>
             `;
             container.appendChild(pill);
         }
@@ -574,6 +594,28 @@
             } catch (err) {
                 statusLabel.innerText = "Connection error. Ingestion failed.";
                 statusLabel.style.color = "red";
+            }
+        }
+
+        // Handle Document Deletion (purges PostgreSQL metadata record AND Qdrant vector chunks for this file)
+        async function deleteDocument(filename, btnElement) {
+            if (!sessionId) return;
+            if (!confirm(`Are you sure you want to remove "${filename}" and its vector index?`)) return;
+
+            try {
+                const response = await fetch(`/chat/${sessionId}/document/${encodeURIComponent(filename)}`, {
+                    method: "DELETE"
+                });
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    const pill = btnElement.closest(".file-pill");
+                    if (pill) pill.remove();
+                } else {
+                    alert("Failed to remove document: " + data.message);
+                }
+            } catch (err) {
+                alert("Connection error. Unable to remove document.");
             }
         }
 
