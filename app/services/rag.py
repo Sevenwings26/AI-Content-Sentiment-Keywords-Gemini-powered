@@ -166,6 +166,7 @@ class RAGService:
                 "preview": payload["content"][:150] + "..."
             })
 
+        # SYSTEM PROMPT
         system_instruction = (
             "You are a helpful personal knowledge assistant. Answer the user's question "
             "using ONLY the provided Context block. Be truthful and ground your answer. "
