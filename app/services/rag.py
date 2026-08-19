@@ -1,16 +1,26 @@
-﻿# app/services/rag.py
+# app/services/rag.py
 import os
 import uuid
+import logging
 from io import BytesIO
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+from qdrant_client.models import (
+    Distance, VectorParams, PointStruct, Filter, 
+    FieldCondition, MatchValue, PayloadSchemaType
+)
 
 from app.services.llm import BaseLLMService
 from app.services.reranker import CrossEncoderReranker
+from app.services.security_filter import RAGSecurityFilterBuilder
 from app.parsers.factory import ParserFactory
 from app.connectors.file_connector import FileConnector
+from app.core.audit import AuditLogger
+from app.core.security import TokenData
+from app.models.enterprise_models import UserRole
+
+logger = logging.getLogger("rag_service")
 
 class RAGService:
     # Class-level client singleton cache to prevent locking conflicts
@@ -18,14 +28,14 @@ class RAGService:
 
     def __init__(self, llm_service: BaseLLMService):
         self.llm = llm_service
-        self.collection_name = "assistant_knowledge"
+        self.collection_name = os.getenv("QDRANT_COLLECTION", "assistant_knowledge")
         self.reranker = CrossEncoderReranker()
         
         # 1. Initialize client using the cached singleton
         if RAGService._qdrant_client is None:
-            storage_mode = os.getenv("QDRANT_STORAGE", "local").lower()
+            storage_mode = os.getenv("QDRANT_STORAGE", "server").lower()
             if storage_mode == "server":
-                host = os.getenv("QDRANT_HOST", "localhost")
+                host = os.getenv("QDRANT_HOST", "qdrant")
                 port = int(os.getenv("QDRANT_PORT", 6333))
                 api_key = os.getenv("QDRANT_API_KEY", None)
                 RAGService._qdrant_client = QdrantClient(host=host, port=port, api_key=api_key)
@@ -35,25 +45,18 @@ class RAGService:
 
         self.qdrant = RAGService._qdrant_client
 
-        # 2. Initialize database collection parameters
+        # 2. Initialize database collection & payload indexes
         self._ensure_collection_exists()
 
     def _ensure_collection_exists(self):
         """
-        Ensures that the target collection exists in Qdrant with matching vector dimensions.
-        Dynamically detects active embedding provider dimension and recreates collection if mismatched.
+        Ensures that the target collection exists in Qdrant with matching vector dimensions
+        and payload indexes for fast O(1) multi-tenant & RBAC pre-filtering.
         """
-        try:
-            sample_vector = self.llm.get_embeddings("test")
-            vector_dimension = len(sample_vector)
-        except Exception:
-            vector_dimension = int(os.getenv("EMBEDDING_DIMENSION", 1024))
+        vector_dimension = int(os.getenv("EMBEDDING_DIMENSION", 768))
 
-        if self.qdrant.collection_exists(collection_name=self.collection_name):
-            collection_info = self.qdrant.get_collection(collection_name=self.collection_name)
-            existing_size = collection_info.config.params.vectors.size
-            if existing_size != vector_dimension:
-                self.qdrant.delete_collection(collection_name=self.collection_name)
+        if not self.qdrant.collection_exists(collection_name=self.collection_name):
+            try:
                 self.qdrant.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=VectorParams(
@@ -61,14 +64,28 @@ class RAGService:
                         distance=Distance.COSINE
                     )
                 )
-        else:
-            self.qdrant.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=VectorParams(
-                    size=vector_dimension, 
-                    distance=Distance.COSINE
+                logger.info(f"Created collection '{self.collection_name}' with dim {vector_dimension}")
+            except Exception as e:
+                logger.warning(f"Collection creation notice: {e}")
+
+        # Ensure Payload Indexes for fast multi-tenant security filtering
+        indexed_fields = [
+            ("org_id", PayloadSchemaType.KEYWORD),
+            ("department_id", PayloadSchemaType.KEYWORD),
+            ("access_level", PayloadSchemaType.KEYWORD),
+            ("uploader_id", PayloadSchemaType.KEYWORD),
+            ("session_id", PayloadSchemaType.KEYWORD),
+            ("document_id", PayloadSchemaType.KEYWORD),
+        ]
+        for field_name, schema_type in indexed_fields:
+            try:
+                self.qdrant.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name=field_name,
+                    field_schema=schema_type
                 )
-            )
+            except Exception:
+                pass  # Index already exists
 
     def extract_text_from_file(self, filename: str, file_bytes: bytes, mime_type: str = None) -> str:
         """Parses PDF, DOCX, TXT, MD, CSV, JSON using ParserFactory."""
@@ -87,11 +104,68 @@ class RAGService:
                 chunks.append(chunk)
         return chunks
 
+    # --- Enterprise Ingestion Pipeline ---
+
+    def ingest_enterprise_document(
+        self,
+        filename: str,
+        file_bytes: bytes,
+        document_id: str,
+        org_id: str,
+        department_id: str,
+        uploader_id: str,
+        access_level: str,
+        session_id: Optional[str] = None,
+        mime_type: Optional[str] = None
+    ) -> int:
+        """
+        Ingests document chunks tagged with enterprise multi-tenant metadata:
+        org_id, department_id, uploader_id, access_level, document_id.
+        """
+        connector = FileConnector(filename=filename, content_bytes=file_bytes, mime_type=mime_type)
+        raw_doc = next(connector.fetch_documents())
+
+        raw_text = self.extract_text_from_file(raw_doc.filename, raw_doc.content_bytes, raw_doc.mime_type)
+        chunks = self.chunk_text(raw_text)
+        
+        if not chunks:
+            raise ValueError("No extractable text found in document.")
+
+        points = []
+        for idx, chunk in enumerate(chunks):
+            point_id = str(uuid.uuid4())
+            embedding = self.llm.get_embeddings(chunk)
+            
+            points.append(
+                PointStruct(
+                    id=point_id,
+                    vector=embedding,
+                    payload={
+                        "point_id": point_id,
+                        "document_id": document_id,
+                        "org_id": org_id,
+                        "department_id": department_id,
+                        "uploader_id": uploader_id,
+                        "access_level": access_level,
+                        "session_id": session_id,
+                        "filename": filename,
+                        "chunk_index": idx,
+                        "content": chunk,
+                        "source_type": raw_doc.source_type
+                    }
+                )
+            )
+
+        self.qdrant.upsert(
+            collection_name=self.collection_name,
+            points=points
+        )
+        return len(chunks)
+
+    # --- Legacy Session Ingestion (Backward Compatible) ---
+
     def ingest_document(self, filename: str, file_bytes: bytes, session_id: str, mime_type: str = None) -> str:
-        """
-        Ingests documents using FileConnector and ParserFactory.
-        Extracts, chunks, embeds, and indexes points into Qdrant.
-        """
+        """Backward-compatible ingestion for legacy flat sessions."""
         connector = FileConnector(filename=filename, content_bytes=file_bytes, mime_type=mime_type)
         raw_doc = next(connector.fetch_documents())
 
@@ -143,22 +217,16 @@ class RAGService:
             )
             return True
         except Exception as e:
-            print(f"Error purging Qdrant vectors for session {session_id}: {e}")
+            logger.error(f"Error purging Qdrant vectors for session {session_id}: {e}")
             return False
 
-    def delete_document_vectors(self, session_id: str, filename: str) -> bool:
-        """Purges vector chunks associated with a specific file within a session from Qdrant."""
+    def delete_document_vectors(self, document_id: str, org_id: str) -> bool:
+        """Purges vector chunks for a specific document with org_id validation."""
         try:
             doc_filter = Filter(
                 must=[
-                    FieldCondition(
-                        key="session_id",
-                        match=MatchValue(value=session_id)
-                    ),
-                    FieldCondition(
-                        key="filename",
-                        match=MatchValue(value=filename)
-                    )
+                    FieldCondition(key="org_id", match=MatchValue(value=org_id)),
+                    FieldCondition(key="document_id", match=MatchValue(value=document_id))
                 ]
             )
             self.qdrant.delete(
@@ -167,18 +235,117 @@ class RAGService:
             )
             return True
         except Exception as e:
-            print(f"Error purging Qdrant vectors for file {filename} in session {session_id}: {e}")
+            logger.error(f"Error purging Qdrant vectors for document {document_id}: {e}")
             return False
 
+    # --- Enterprise Scoped Query Execution ---
+
+    def query_enterprise(
+        self,
+        query: str,
+        user_context: TokenData,
+        session_id: Optional[str],
+        db: Session,
+        top_k: int = 3,
+        score_threshold: float = 0.30
+    ) -> Tuple[str, List[Dict[str, Any]]]:
+        """
+        Executes an enterprise RAG query:
+        1. Builds unbypassable multi-tenant security filter based on user's verified token.
+        2. Retrieves candidate vectors from Qdrant strictly within org/dept/role boundary.
+        3. Re-ranks candidates with FlashRank Cross-Encoder.
+        4. Injects verified citations into grounded prompt.
+        5. Emits compliance audit log.
+        """
+        query_embedding = self.llm.get_embeddings(query)
+        
+        # 1. Unbypassable Multi-Tenant Security Filter
+        security_filter = RAGSecurityFilterBuilder.build_search_filter(
+            org_id=user_context.org_id,
+            department_id=user_context.department_id or "",
+            user_id=user_context.user_id,
+            user_role=UserRole(user_context.role),
+            session_id=session_id
+        )
+
+        # 2. Vector Candidate Pool Retrieval (limit=15)
+        response = self.qdrant.query_points(
+            collection_name=self.collection_name,
+            query=query_embedding,
+            query_filter=security_filter,
+            limit=15
+        )
+        results = response.points
+
+        # 3. Score Threshold Filter
+        relevant_results = [p for p in results if p.score >= score_threshold]
+        if not relevant_results:
+            system_instruction = "You are a helpful enterprise knowledge assistant."
+            answer = self.llm.generate_text(query, system_instruction=system_instruction)
+            return answer, []
+
+        # 4. Cross-Encoder Re-ranking Stage
+        candidate_chunks = [
+            {
+                "id": str(p.id),
+                "text": p.payload["content"],
+                "payload": p.payload,
+                "vector_score": p.score
+            }
+            for p in relevant_results
+        ]
+
+        reranked_chunks = self.reranker.rerank(query=query, candidate_chunks=candidate_chunks, top_n=top_k)
+
+        # 5. Grounded Prompt Context Construction
+        context_block = ""
+        sources = []
+        retrieved_doc_ids = []
+        for chunk in reranked_chunks:
+            payload = chunk["meta"]
+            doc_id = payload.get("document_id", "unknown")
+            retrieved_doc_ids.append(doc_id)
+            context_block += f"Document: {payload['filename']} [Dept: {payload.get('department_id', 'General')}]\nContent: {chunk['text']}\n\n---\n\n"
+            sources.append({
+                "filename": payload["filename"],
+                "document_id": doc_id,
+                "department_id": payload.get("department_id"),
+                "access_level": payload.get("access_level"),
+                "preview": chunk["text"][:150] + "...",
+                "relevance_score": float(chunk.get("score", 0.0))
+            })
+
+        system_instruction = (
+            "You are a helpful enterprise knowledge assistant. Answer the user's question "
+            "truthfully using ONLY the provided verified Context block. Cite source documents. "
+            "If the answer cannot be found in the Context, state clearly that the knowledge base "
+            "does not contain this information."
+        )
+        
+        prompt = f"Context:\n{context_block}\n\nUser Question: {query}"
+        answer = self.llm.generate_text(prompt, system_instruction=system_instruction)
+
+        # 6. Audit Logging for Compliance
+        AuditLogger.log(
+            db=db,
+            org_id=user_context.org_id,
+            user_id=user_context.user_id,
+            action="ENTERPRISE_RAG_QUERY",
+            resource_type="CHAT_QUERY",
+            resource_id=session_id,
+            details={
+                "query": query[:200],
+                "retrieved_documents": retrieved_doc_ids,
+                "sources_count": len(sources)
+            }
+        )
+
+        return answer, sources
+
+    # --- Legacy Session Query (Backward Compatible) ---
+
     def query_assistant(self, query: str, session_id: str, db: Session, top_k: int = 3, score_threshold: float = 0.35) -> Tuple[str, List[Dict[str, Any]]]:
-        """
-        Advanced Hybrid Retrieval & Re-ranking Workflow:
-        1. Fast SQL Pre-Check: Checks if any documents are attached to session_id in PostgreSQL.
-        2. Candidate Retrieval: Retrieves candidate_k=15 chunks from Qdrant.
-        3. Relevance Filtering: Filters out low-scoring vector candidates.
-        4. Cross-Encoder Re-ranking: Uses FlashRank to re-score candidate passages for precision.
-        """
-        # --- Step 1: Fast SQL Pre-Check ---
+        """Backward-compatible query for legacy flat sessions."""
         from app.crud import rag_chat_crud
         uploaded_docs = rag_chat_crud.get_chat_documents(db, session_id)
         if not uploaded_docs:
@@ -186,7 +353,6 @@ class RAGService:
             answer = self.llm.generate_text(query, system_instruction=system_instruction)
             return answer, []
 
-        # --- Step 2: Candidate Vector Search (Candidate Pool = 15) ---
         query_embedding = self.llm.get_embeddings(query)
         session_filter = Filter(
             must=[
@@ -205,14 +371,12 @@ class RAGService:
         )
         results = response.points
 
-        # Relevance Score Threshold Filtering
         relevant_results = [p for p in results if p.score >= score_threshold]
         if not relevant_results:
             system_instruction = "You are a helpful personal assistant."
             answer = self.llm.generate_text(query, system_instruction=system_instruction)
             return answer, []
 
-        # --- Step 3: Cross-Encoder Re-ranking Stage ---
         candidate_chunks = [
             {
                 "id": str(p.id),
@@ -225,7 +389,6 @@ class RAGService:
 
         reranked_chunks = self.reranker.rerank(query=query, candidate_chunks=candidate_chunks, top_n=top_k)
 
-        # --- Step 4: Grounded Prompt Context Construction ---
         context_block = ""
         sources = []
         for chunk in reranked_chunks:
@@ -239,15 +402,9 @@ class RAGService:
 
         system_instruction = (
             "You are a helpful personal knowledge assistant. Answer the user's question "
-            "using ONLY the provided Context block. Be truthful and ground your answer. "
-            "If the answer cannot be found in the Context, explain that you don't know "
-            "based on the uploaded documents."
+            "using ONLY the provided Context block. Be truthful and ground your answer."
         )
         
-        prompt = (
-            f"Context:\n{context_block}\n"
-            f"User Question: {query}"
-        )
-
+        prompt = f"Context:\n{context_block}\n\nUser Question: {query}"
         answer = self.llm.generate_text(prompt, system_instruction=system_instruction)
         return answer, sources
