@@ -131,3 +131,23 @@ async def chat_query(
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# 5. Handle Chat Session Deletion: "DELETE http://localhost:4500/chat/{session_id}"
+@router.delete("/chat/{session_id}")
+async def delete_chat_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+    rag_service = Depends(get_rag_service)
+):
+    try:
+        # 1. Purge vectors from Qdrant
+        rag_service.delete_session_vectors(session_id)
+
+        # 2. Delete session (and cascaded records) from PostgreSQL
+        deleted = rag_chat_crud.delete_chat_session(db, session_id)
+        if not deleted:
+            return {"status": "error", "message": "Chat session not found."}
+
+        return {"status": "success", "message": "Chat session and vector index deleted successfully."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

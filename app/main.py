@@ -16,7 +16,7 @@ app.add_middleware(
 )
 
 # Run migrations/table creation
-# models.Base.metadata.create_all(bind=database.engine)
+# models.Base.metadata.create_all(bind=database.engine) # replace with alembic upgrade head
 
 # Register Router Modules
 app.include_router(content_analyse.router)

@@ -126,6 +126,26 @@ class RAGService:
         )
         return f"Successfully ingested {len(chunks)} chunks from {filename} into Qdrant."
 
+    def delete_session_vectors(self, session_id: str) -> bool:
+        """Purges all indexed vector points associated with a specific session_id from Qdrant."""
+        try:
+            session_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="session_id",
+                        match=MatchValue(value=session_id)
+                    )
+                ]
+            )
+            self.qdrant.delete(
+                collection_name=self.collection_name,
+                points_selector=session_filter
+            )
+            return True
+        except Exception as e:
+            print(f"Error purging Qdrant vectors for session {session_id}: {e}")
+            return False
+
     def query_assistant(self, query: str, session_id: str, db: Session, top_k: int = 3) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Retrieves matching chunks from Qdrant with session-level filters, 

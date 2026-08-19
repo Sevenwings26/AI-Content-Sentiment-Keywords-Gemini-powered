@@ -1,5 +1,4 @@
-# app/crud.py (add these to the end of the file)
-from sqlalchemy.orm import Session
+﻿from sqlalchemy.orm import Session
 from app import models
 
 # --- RAG Session CRUD ---
@@ -13,6 +12,15 @@ def create_chat_session(db: Session, title: str = "New Chat Session"):
 
 def get_chat_session(db: Session, session_id: str):
     return db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
+
+def delete_chat_session(db: Session, session_id: str) -> bool:
+    """Deletes a chat session from PostgreSQL (cascading to messages and document metadata)."""
+    db_session = get_chat_session(db, session_id)
+    if db_session:
+        db.delete(db_session)
+        db.commit()
+        return True
+    return False
 
 # --- Chat Messages CRUD ---
 
@@ -43,5 +51,3 @@ def register_chat_document(db: Session, session_id: str, filename: str):
 
 def get_chat_documents(db: Session, session_id: str):
     return db.query(models.ChatDocument).filter(models.ChatDocument.session_id == session_id).all()
-
-    
