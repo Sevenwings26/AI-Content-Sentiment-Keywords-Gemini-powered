@@ -22,3 +22,4 @@ class FileConnector(BaseConnector):
             mime_type=self.mime_type,
             metadata={"filename": self.filename}
         )
+
