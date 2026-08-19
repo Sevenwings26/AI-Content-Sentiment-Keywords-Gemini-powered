@@ -153,7 +153,7 @@ The semaphore ensures that **only 5 threads** can access the Gemini API at a tim
 
 ## 🎓 Inspiration
 
-This project was inspired by **Zakari Yahali**, freecodecamp, whose encouragement sparked the fusion of generative AI with simple, research-focused web tools. Zaks also suggested that this project could expand into broader NLP functionalities like summarization and question generation.
+This project was inspired by https://github.com/zakariyahali  **Zakari Yahali**, freecodecamp, whose encouragement sparked the fusion of generative AI with simple, research-focused web tools. Zaks also suggested that this project could expand into broader NLP functionalities like summarization and question generation.
 
 ---
 

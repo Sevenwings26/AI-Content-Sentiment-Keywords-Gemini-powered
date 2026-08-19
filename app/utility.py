@@ -1,36 +1,35 @@
+# app/utility.py
 import os
+import threading
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from app import crud
-import google.generativeai as genai
-import threading
+from app.services.llm import LLMFactory  # Import our factory
 
-# environment 
+# Load environment
 load_dotenv()
 
-# Gemini API configuration
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Instantiate the active provider globally (loads according to LLM_PROVIDER env variable)
+llm_service = LLMFactory.get_provider()
 
-# Initialize Gemini model
-model = genai.GenerativeModel("gemini-2.5-flash")
-
-# Semaphore to control threading (up to 5 threads at once)
+# Semaphore to control threading
 semaphore = threading.Semaphore(5)
 
-# Generate content using Gemini model
+# Generate content
 def generate_context(db: Session, topic: str):
     with semaphore:
         search_term = crud.get_search_term(db, topic)
         if not search_term:
             search_term = crud.create_search_term(db, topic)
 
-        prompt = f"You are a helpful assistant. Write a detailed article about {topic}."
-        response = model.generate_content(prompt)
-        generate_text = response.text.strip()
+        prompt = f"Write a detailed article about {topic}."
+        system_instruction = "You are a helpful assistant."
+        
+        # This will call Gemini, vLLM, Ollama or OpenAI based on your configuration
+        generated_text = llm_service.generate_text(prompt, system_instruction=system_instruction)
 
-        # Store generated text in the database
-        crud.create_search_content(db, generate_text, search_term.id)
-        return generate_text
+        crud.create_search_content(db, generated_text, search_term.id)
+        return generated_text
 
 # Analyze content: readability + sentiment
 def analyze_content(db: Session, content: str):
@@ -43,121 +42,69 @@ def analyze_content(db: Session, content: str):
         sentiment = get_sentiment_analysis(content)
 
         crud.create_sentiment_analysis(db, readability, sentiment, search_term.id)
-
         return readability, sentiment
 
-# Dummy readability logic (replace with real logic if needed)
 def get_readability_score(content: str) -> str:
     return "Readability Score: Good"
 
 # Perform sentiment analysis
 def get_sentiment_analysis(content: str) -> str:
-    prompt = (
-        f"Analyze the sentiment of the following text:\n\n{content}\n\n"
-        "Is the sentiment positive, neutral, or negative?"
-    )
-    response = model.generate_content(prompt)
-    return response.text.strip()
+    prompt = f"Analyze the sentiment of the following text:\n\n{content}"
+    system_instruction = "Respond with exactly one word: 'Positive', 'Neutral', or 'Negative'."
+    
+    return llm_service.generate_text(prompt, system_instruction=system_instruction)
 
-
-# keywword extractor
+# Keyword extractor
 def get_keywords(db: Session, content: str) -> str:
     with semaphore:
         search_term = crud.get_search_term(db, content)
         if not search_term:
             search_term = crud.create_search_term(db, content)
 
-        prompt = (
-            f"You are a marketing strategist and SEO expert. Extract the most relevant and high-ranking keywords for SEO campaigns from the following content:\n\n{content}\n\n"
-            "Return them as a comma-separated list."
-        )
-        response = model.generate_content(prompt)
-        keywords_text = response.text.strip()
+        prompt = f"Extract the most relevant and high-ranking keywords for SEO campaigns from the following content:\n\n{content}"
+        system_instruction = "You are a marketing strategist and SEO expert. Return keywords as a comma-separated list."
+        
+        keywords_text = llm_service.generate_text(prompt, system_instruction=system_instruction)
 
         crud.create_keywords(db, keywords_text, search_term.id)
-
         return keywords_text
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Perform content summary
-def get_content_summary(content: str) -> str:
-    prompt = (
-        f"Fetch keywords of the following text:\n\n{content}\n\n, for SEO optimaimizations"
-    )
-    response = model.generate_context(prompt)
-    return response
-
-
-
-
-
-
-
-
+        
 
 
 
 # import os
-# import crud, models
-
 # from sqlalchemy.orm import Session
 # from dotenv import load_dotenv
+# from app import crud
+# import google.generativeai as genai
 # import threading
-# # from concurrent.futures import ThreadPoolExecutor  
 
-# from openai import OpenAI
-
-
+# # environment 
 # load_dotenv()
 
-# # # using OpenAI 
-# client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-# # client = OpenAI(
-# #     api_key=os.getenv("GEMINI_API_KEY"),
-# #     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-# # )
+# # Gemini API configuration
+# genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
+# # Initialize Gemini model
+# model = genai.GenerativeModel("gemini-2.5-flash")
 
-# # Semaphore to control threading
-# semaphore = threading.Semaphore(5) # allows 5 threads at a time. 
+# # Semaphore to control threading (up to 5 threads at once)
+# semaphore = threading.Semaphore(5)
 
-# # Generate context using chat model
+# # Generate content using Gemini model
 # def generate_context(db: Session, topic: str):
 #     with semaphore:
 #         search_term = crud.get_search_term(db, topic)
 #         if not search_term:
 #             search_term = crud.create_search_term(db, topic)
 
-#         """OPEN-AI"""    
-#         response = client.chat.completions.create(
-#             model="gpt-3.5-turbo",  # correct model for chat
-#             # model="gemini-2.5-flash",
-#             messages=[
-#                 {"role": "system", "content": "You are a helpful assistant."},
-#                 {"role": "user", "content": f"Write a detailed article about {topic}"},
-#             ]
-#         )
-#         # Extract generated context from the response 
-#         generate_text = response.choices[0].message.content.strip()
+#         prompt = f"You are a helpful assistant. Write a detailed article about {topic}."
+#         response = model.generate_content(prompt)
+#         generate_text = response.text.strip()
 
-#         # store generated text in database 
+#         # Store generated text in the database
 #         crud.create_search_content(db, generate_text, search_term.id)
 #         return generate_text
-
-
 
 # # Analyze content: readability + sentiment
 # def analyze_content(db: Session, content: str):
@@ -168,23 +115,137 @@ def get_content_summary(content: str) -> str:
 
 #         readability = get_readability_score(content)
 #         sentiment = get_sentiment_analysis(content)
+
 #         crud.create_sentiment_analysis(db, readability, sentiment, search_term.id)
+
 #         return readability, sentiment
 
-
-# # Dummy readability logic (you can integrate actual NLP here)
+# # Dummy readability logic (replace with real logic if needed)
 # def get_readability_score(content: str) -> str:
 #     return "Readability Score: Good"
 
-# # Use chat model for sentiment analysis 
+# # Perform sentiment analysis
 # def get_sentiment_analysis(content: str) -> str:
-#     response = client.chat.completions.create(
-#         # model="gpt-3.5-turbo",
-#         model="gemini-2.5-flash",
-#         messages=[
-#             {"role": "system", "content": "You are a helpful assistant."},
-#             {"role": "user", "content": f"Analyze the sentiment of the following text:\n\n{content}\n\nIs the sentiment positive, neutral, or negative?"},
-#         ],
-#         max_tokens=10
+#     prompt = (
+#         f"Analyze the sentiment of the following text:\n\n{content}\n\n"
+#         "Is the sentiment positive, neutral, or negative?"
 #     )
-#     return response.choices[0].message.content.strip()
+#     response = model.generate_content(prompt)
+#     return response.text.strip()
+
+
+# # keywword extractor
+# def get_keywords(db: Session, content: str) -> str:
+#     with semaphore:
+#         search_term = crud.get_search_term(db, content)
+#         if not search_term:
+#             search_term = crud.create_search_term(db, content)
+
+#         prompt = (
+#             f"You are a marketing strategist and SEO expert. Extract the most relevant and high-ranking keywords for SEO campaigns from the following content:\n\n{content}\n\n"
+#             "Return them as a comma-separated list."
+#         )
+#         response = model.generate_content(prompt)
+#         keywords_text = response.text.strip()
+
+#         crud.create_keywords(db, keywords_text, search_term.id)
+
+#         return keywords_text
+
+
+# # Perform content summary
+# def get_content_summary(content: str) -> str:
+#     prompt = (
+#         f"Fetch keywords of the following text:\n\n{content}\n\n, for SEO optimaimizations"
+#     )
+#     response = model.generate_context(prompt)
+#     return response
+
+
+
+
+
+
+
+
+
+
+
+# # import os
+# # import crud, models
+
+# # from sqlalchemy.orm import Session
+# # from dotenv import load_dotenv
+# # import threading
+# # # from concurrent.futures import ThreadPoolExecutor  
+
+# # from openai import OpenAI
+
+
+# # load_dotenv()
+
+# # # # using OpenAI 
+# # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# # # client = OpenAI(
+# # #     api_key=os.getenv("GEMINI_API_KEY"),
+# # #     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+# # # )
+
+
+# # # Semaphore to control threading
+# # semaphore = threading.Semaphore(5) # allows 5 threads at a time. 
+
+# # # Generate context using chat model
+# # def generate_context(db: Session, topic: str):
+# #     with semaphore:
+# #         search_term = crud.get_search_term(db, topic)
+# #         if not search_term:
+# #             search_term = crud.create_search_term(db, topic)
+
+# #         """OPEN-AI"""    
+# #         response = client.chat.completions.create(
+# #             model="gpt-3.5-turbo",  # correct model for chat
+# #             # model="gemini-2.5-flash",
+# #             messages=[
+# #                 {"role": "system", "content": "You are a helpful assistant."},
+# #                 {"role": "user", "content": f"Write a detailed article about {topic}"},
+# #             ]
+# #         )
+# #         # Extract generated context from the response 
+# #         generate_text = response.choices[0].message.content.strip()
+
+# #         # store generated text in database 
+# #         crud.create_search_content(db, generate_text, search_term.id)
+# #         return generate_text
+
+
+
+# # # Analyze content: readability + sentiment
+# # def analyze_content(db: Session, content: str):
+# #     with semaphore:
+# #         search_term = crud.get_search_term(db, content)
+# #         if not search_term:
+# #             search_term = crud.create_search_term(db, content)
+
+# #         readability = get_readability_score(content)
+# #         sentiment = get_sentiment_analysis(content)
+# #         crud.create_sentiment_analysis(db, readability, sentiment, search_term.id)
+# #         return readability, sentiment
+
+
+# # # Dummy readability logic (you can integrate actual NLP here)
+# # def get_readability_score(content: str) -> str:
+# #     return "Readability Score: Good"
+
+# # # Use chat model for sentiment analysis 
+# # def get_sentiment_analysis(content: str) -> str:
+# #     response = client.chat.completions.create(
+# #         # model="gpt-3.5-turbo",
+# #         model="gemini-2.5-flash",
+# #         messages=[
+# #             {"role": "system", "content": "You are a helpful assistant."},
+# #             {"role": "user", "content": f"Analyze the sentiment of the following text:\n\n{content}\n\nIs the sentiment positive, neutral, or negative?"},
+# #         ],
+# #         max_tokens=10
+# #     )
+# #     return response.choices[0].message.content.strip()

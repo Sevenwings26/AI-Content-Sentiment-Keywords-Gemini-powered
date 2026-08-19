@@ -1,9 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, JSON, ForeignKey 
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
 import hashlib
-
-Base = declarative_base()
+from app.database import Base
 
 # # Table to store each unique search/topic term entered by the user.
 # class SearchTerm(Base):
@@ -62,3 +60,4 @@ class GeneratedKeywords(Base):
     search_term_id = Column(Integer, ForeignKey('search_terms.id'))  # Link to related search term
     # Reverse link to SearchTerm
     search_term = relationship("SearchTerm", back_populates="generated_keywords")
+

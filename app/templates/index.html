@@ -1,173 +1,556 @@
-<!-- app/templates/index.html -->
-
+﻿<!-- app/templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-Powered Content Generator and Analyzer</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <title>RAG Assistant Workspace</title>
+    <!-- Google Fonts for modern aesthetics -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            /* padding-top: 56px; */
-        }
-        .container {
-            max-width: 800px;
-        }
-        .form-section {
-            margin-bottom: 40px;
-            padding: 20px;
-            border: 1px solid #605e5eaf;
-            border-radius: 8px;
-            background-color: #eeeeee;
-        }
-        .nav-head{
-            background-color: #ddddddcd;
-            padding: 5px;
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --border-color: #e9ecef;
+            --text-main: #212529;
+            --text-muted: #6c757d;
+            --accent-color: #000000;
+            --accent-text: #ffffff;
+
+            /* Modern Chat Bubble Colors */
+            --user-bubble: #1f2022;
+            --user-bubble-text: #ffffff;
+            --assistant-bubble: #f1f3f4;
+            --assistant-bubble-text: #202124;
         }
 
-        .result-section {
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: 280px;
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
             padding: 20px;
-            border: 1px solid #ddd;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .new-chat-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--accent-color);
+            color: var(--accent-text);
+            border: none;
             border-radius: 8px;
-            background-color: #f1f1f1;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+        }
+
+        .new-chat-btn:hover {
+            opacity: 0.85;
+        }
+
+        .sessions-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .session-item {
+            display: block;
+            padding: 12px 16px;
+            margin-bottom: 6px;
+            border-radius: 8px;
+            color: var(--text-main);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: background-color 0.2s ease;
+        }
+
+        .session-item:hover {
+            background-color: var(--border-color);
+        }
+
+        .session-item.active {
+            background-color: #e9ecef;
+            font-weight: 600;
+        }
+
+        /* Workspace Styling */
+        .workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-primary);
+        }
+
+        /* Workspace Header */
+        .workspace-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .workspace-title h2 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .workspace-title p {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .model-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #2ec4b6;
+            border-radius: 50%;
+        }
+
+        /* Chat Feed */
+        .chat-feed {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            display: flex;
+            flex-direction: column;
+            max-width: 75%;
+        }
+
+        .message.user {
+            align-self: flex-end;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+        }
+
+        .message-bubble {
+            padding: 12px 18px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-bubble {
+            background-color: var(--user-bubble);
+            color: var(--user-bubble-text);
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .message-bubble {
+            background-color: var(--assistant-bubble);
+            color: var(--assistant-bubble-text);
+            border-bottom-left-radius: 4px;
+        }
+
+        .sources-container {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .source-tag {
+            font-size: 11px;
+            padding: 4px 8px;
+            background-color: rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* Input Bar Area */
+        .input-container {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--bg-primary);
+        }
+
+        .attached-files-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .file-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            font-size: 12px;
+            color: var(--text-main);
+        }
+
+        .file-pill-icon {
+            font-size: 14px;
+        }
+
+        .input-bar {
+            display: flex;
+            align-items: center;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 4px 8px 4px 16px;
+            gap: 8px;
+        }
+
+        .attachment-btn {
+            cursor: pointer;
+            font-size: 18px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            transition: background-color 0.2s ease;
+        }
+
+        .attachment-btn:hover {
+            background-color: var(--border-color);
+            color: var(--text-main);
+        }
+
+        .input-bar input[type="text"] {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 14px;
+            outline: none;
+            color: var(--text-main);
+            padding: 8px 0;
+        }
+
+        .send-btn {
+            background-color: var(--accent-color);
+            color: var(--accent-text);
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+        }
+
+        .send-btn:hover {
+            opacity: 0.85;
+        }
+
+        .upload-progress-indicator {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            display: none;
         }
     </style>
 </head>
-<body>    
-    <div class="nav-head">
-        <nav class="container navbar navbar-expand-lg bg-body-tertiary">
-            <div class="container-fluid">
-            <a class="navbar-brand" href="#" style="color: black; font-weight: 900;">AI Content & Analysis</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon" style="background-color: rgb(57, 22, 22);"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
-            <div class="navbar-nav ml-4">
-                <a class="nav-link active" aria-current="page" style="color: rgb(3, 3, 127);" href="#content-section">Generate Content</a>
-                <a class="nav-link" href="#analysis-section" style="color: rgb(3, 3, 127);"> Analyze Content</a>
-                <a class="nav-link" href="#keyword-section" style="color: rgb(3, 3, 127);">Keyword Content</a>
-                <a class="nav-link" href="#result-section" style="color: rgb(3, 3, 127);">Results</a>
-            </div>
-            </div>
+
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <button class="new-chat-btn" onclick="createNewChat()">+ New Chat</button>
         </div>
-        </nav>
-
-    </div>
-
-    <div class="container mt-5">
-        <h1 class="mb-4 text-center">AI-Powered Content, Analyzer and Keywords Generator</h1>
-        <div id="content-section" class="form-section">
-            <h2>Generate Content</h2>
-            <form id="content-form">
-                <div class="form-group">
-                    <label for="topic">Enter Topic, no need for prompts.</label>
-                    <input type="text" class="form-control" id="topic" required>
-                </div>
-                <button type="submit" class="btn btn-tertiary" style="background-color: black; color: white;">Generate Content</button>
-            </form>
-        </div>
-
-        <div id="analysis-section" class="form-section">
-            <h2>Analyze Content</h2>
-            <form id="analyze-form">
-                <div class="form-group">
-                    <label for="content">Enter Content for Analysis</label>
-                    <textarea class="form-control" id="analyze-content" rows="4" required></textarea>
-                </div>
-                <button type="submit" class="btn btn-tertiary" style="background-color: black; color: white;">Analyze Content</button>
-                <button type="button" class="btn btn-secondary" id="import-content-analyze">Import Generated Content</button>
-            </form>
-        </div>
-
-        <div id="keyword-section" class="form-section">
-            <h2>Keywords content</h2>
-            <form id="keyword-form">
-                <div class="form-group">
-                    <label for="content">Enter Content</label>
-                    <textarea class="form-control" id="keywords-content" rows="4" required></textarea>
-                </div>
-                <button type="submit" class="btn btn-tertiary" style="background-color: black; color: white;">Generate Keywords</button>
-                <button type="button" class="btn btn-secondary" id="import-content-keywords">Import Generated Content</button>
-            </form>
-        </div>
-
-        <div id="result-section" class="result-section">
-            <h2>Results</h2>
-            <div class="mb-4">
-                <h3>Generated Content</h3>
-                <p id="generated-content"></p>
-            </div>
-            <div class="mb-4">
-                <h3>Generated Keywords</h3>
-                <p id="generated-keywords"></p>
-            </div>
-            <div>
-                <h3>Analysis Results</h3>
-                <ul>
-                    <li>Readability: <span id="readability"></span></li>
-                    <li>Sentiment: <span id="sentiment"></span></li>
-                </ul>
-            </div>
+        <div class="sessions-list">
+            {% for s in sessions %}
+            <a href="/chat/{{ s.id }}" class="session-item {% if s.id == session_id %}active{% endif %}">
+                {{ s.title if s.title else "Untitled Chat" }}
+            </a>
+            {% endfor %}
         </div>
     </div>
+
+    <!-- Main Workspace -->
+    <div class="workspace">
+        <!-- Workspace Header -->
+        <div class="workspace-header">
+            <div class="workspace-title">
+                <h2>Assistant Session</h2>
+                <p id="session-id-display">{% if session_id %}ID: {{ session_id }}{% else %}New Draft Workspace{% endif %}</p>
+            </div>
+
+            <div class="model-badge">
+                <span class="status-dot"></span>
+                <span>Grounded Context (RAG)</span>
+            </div>
+        </div>
+
+        <!-- Chat Feed -->
+        <div class="chat-feed" id="chat-feed">
+            {% if not messages %}
+            <div class="message assistant">
+                <div class="message-bubble">
+                    Hello! You can ask general questions, or click the <strong>+</strong> button in the message bar to
+                    upload a document (PDF or TXT) and ask questions directly grounded in its contents.
+                </div>
+            </div>
+            {% else %}
+            {% for msg in messages %}
+            <div class="message {{ msg.role }}">
+                <div class="message-bubble">
+                    {{ msg.content }}
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+
+        <!-- Message Input Area -->
+        <div class="input-container">
+
+            <!-- Document List (Pill Badges) above input field -->
+            <div class="attached-files-container" id="attached-files-list">
+                {% if documents %}
+                {% for doc in documents %}
+                <div class="file-pill">
+                    <span class="file-pill-icon">📄</span>
+                    <span class="file-pill-name" title="{{ doc.filename }}">{{ doc.filename }}</span>
+                </div>
+                {% endfor %}
+                {% endif %}
+            </div>
+
+            <form id="chat-form" onsubmit="handleSendMessage(event)">
+                <div class="input-bar">
+                    <!-- Circular '+' attachment button -->
+                    <label class="attachment-btn" title="Add Document (PDF or TXT)">
+                        +
+                        <input type="file" id="file-input" style="display: none;" onchange="handleFileUpload()">
+                    </label>
+
+                    <input type="text" id="user-input" placeholder="Ask your assistant or upload files..." required
+                        autocomplete="off">
+
+                    <button type="submit" class="send-btn" title="Send message">
+                        <!-- Send SVG Icon -->
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+
+            <div class="upload-progress-indicator" id="upload-status">Indexing document...</div>
+        </div>
+    </div>
+
     <script>
-        // Content
-        document.getElementById('content-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const topic = document.getElementById('topic').value;
-            const payload = { topic: topic };
-            const response = await fetch('/generate/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await response.json();
-            document.getElementById('generated-content').innerText = data.generated_text;
-        });
+        let sessionId = "{{ session_id if session_id else '' }}";
+        const chatFeed = document.getElementById("chat-feed");
 
-        // sentiment analysis
-        document.getElementById('analyze-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const content = document.getElementById('content').value;
-            const payload = { content: content };
+        // Scroll chat feed to bottom on load
+        chatFeed.scrollTop = chatFeed.scrollHeight;
 
-            const response = await fetch('/analyze/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await response.json();
-            document.getElementById('readability').innerText = data.readability;
-            document.getElementById('sentiment').innerText = data.sentiment;
-        });
+        // Redirect to create a clean unpersisted session
+        function createNewChat() {
+            window.location.href = "/";
+        }
 
-        // keywords 
-        document.getElementById('keyword-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const content = document.getElementById('keywords-content').value;
-            const payload = { content: content };
+        // Helper to seamlessly promote unpersisted session to a persisted database session
+        function promoteSessionIfNeeded(newSessionId, newTitle) {
+            if (!sessionId && newSessionId) {
+                sessionId = newSessionId;
+                // Update browser URL without full page refresh
+                window.history.pushState({}, "", "/chat/" + sessionId);
 
-            const response = await fetch('/keywords/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await response.json();
-            document.getElementById('generated-keywords').innerText = data.keywords;
-        });
+                // Update Workspace Header display
+                const displayEl = document.getElementById("session-id-display");
+                if (displayEl) {
+                    displayEl.innerText = "ID: " + sessionId;
+                }
 
-        // parse content 
-        document.getElementById('import-content-analyze').addEventListener('click', () => {
-            const generatedContent = document.getElementById('generated-content').innerText;
-            document.getElementById('analyze-content').value = generatedContent;
-        });
-        
-        document.getElementById('import-content-keywords').addEventListener('click', () => {
-            const generatedContent = document.getElementById('generated-content').innerText;
-            document.getElementById('keywords-content').value = generatedContent;
-        });
+                // Prepend session entry to sidebar
+                const sessionsList = document.querySelector(".sessions-list");
+                if (sessionsList) {
+                    const newLink = document.createElement("a");
+                    newLink.href = "/chat/" + sessionId;
+                    newLink.className = "session-item active";
+                    newLink.innerText = newTitle || "New Chat Session";
+                    sessionsList.prepend(newLink);
+                }
+            }
+        }
 
+        // Helper to dynamically append file pill badge to UI
+        function appendFilePill(filename) {
+            const container = document.getElementById("attached-files-list");
+            if (!container) return;
+            const pill = document.createElement("div");
+            pill.className = "file-pill";
+            pill.innerHTML = `
+                <span class="file-pill-icon">📄</span>
+                <span class="file-pill-name" title="${filename}">${filename}</span>
+            `;
+            container.appendChild(pill);
+        }
+
+        // Handle File Ingestion
+        async function handleFileUpload() {
+            const fileInput = document.getElementById("file-input");
+            if (fileInput.files.length === 0) return;
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("session_id", sessionId);
+
+            const statusLabel = document.getElementById("upload-status");
+            statusLabel.style.display = "block";
+            statusLabel.innerText = `Indexing "${file.name}"...`;
+
+            try {
+                const response = await fetch("/chat/upload", {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    promoteSessionIfNeeded(data.session_id, data.session_title);
+                    statusLabel.innerText = "Document processed successfully!";
+                    statusLabel.style.color = "#2ec4b6";
+                    appendFilePill(file.name);
+                    setTimeout(() => { statusLabel.style.display = "none"; }, 3000);
+                } else {
+                    statusLabel.innerText = "Indexing failed: " + data.message;
+                    statusLabel.style.color = "red";
+                }
+            } catch (err) {
+                statusLabel.innerText = "Connection error. Ingestion failed.";
+                statusLabel.style.color = "red";
+            }
+        }
+
+        // Handle Message Submission
+        async function handleSendMessage(event) {
+            event.preventDefault();
+            const inputField = document.getElementById("user-input");
+            const query = inputField.value.trim();
+            if (!query) return;
+
+            // Clear input box immediately
+            inputField.value = "";
+
+            // 1. Append User Message to UI
+            appendMessage("user", query);
+
+            // 2. Append Assistant Loading Bubble
+            const loadingBubbleId = appendMessage("assistant", "Thinking...");
+
+            try {
+                const response = await fetch("/chat/query", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: query, session_id: sessionId })
+                });
+                const data = await response.json();
+
+                // Remove loading bubble
+                document.getElementById(loadingBubbleId).remove();
+
+                if (data.status === "success") {
+                    promoteSessionIfNeeded(data.session_id, data.session_title);
+                    appendMessage("assistant", data.answer, data.sources);
+                } else {
+                    appendMessage("assistant", "Error: " + data.message);
+                }
+            } catch (err) {
+                document.getElementById(loadingBubbleId).remove();
+                appendMessage("assistant", "Unable to reach server. Please check connection.");
+            }
+        }
+
+        // Helper to append elements to chat feed
+        function appendMessage(role, content, sources = []) {
+            const messageId = "msg-" + Date.now();
+            const messageDiv = document.createElement("div");
+            messageDiv.className = `message ${role}`;
+            messageDiv.id = messageId;
+
+            let sourceHtml = "";
+            if (sources && sources.length > 0) {
+                sourceHtml = `<div class="sources-container">`;
+                sources.forEach(src => {
+                    sourceHtml += `<span class="source-tag">Ref: ${src.filename}</span>`;
+                });
+                sourceHtml += `</div>`;
+            }
+
+            messageDiv.innerHTML = `
+                <div class="message-bubble">
+                    ${content.replace(/\n/g, "<br>")}
+                    ${sourceHtml}
+                </div>
+            `;
+
+            chatFeed.appendChild(messageDiv);
+            chatFeed.scrollTop = chatFeed.scrollHeight;
+            return messageId;
+        }
     </script>
 </body>
+
 </html>
