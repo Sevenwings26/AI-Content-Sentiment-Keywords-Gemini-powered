@@ -8,7 +8,7 @@ from starlette.concurrency import run_in_threadpool
 from pathlib import Path
 
 # base dir 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 # template 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 

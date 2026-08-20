@@ -195,14 +195,14 @@ async def chat_query(
             "status": "success",
             "session_id": session_id,
             "session_title": session_title,
-            "anwser": answer,
+            "answer": answer,
             "sources": sources
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 # 5. Handle Chat Session Deletion
-@router.delete("/chat/tsession_id}")
+@router.delete("/chat/{session_id}")
 async def delete_chat_session(
     session_id: str,
     db: Session = Depends(get_db),
@@ -226,7 +226,7 @@ async def delete_chat_session(
         return {"status": "error", "message": str(e)}
 
 # 6. Handle Document Deletion
-@router.delete("/chat/tsession_id}/document/{filename}")
+@router.delete("/chat/{session_id}/document/{filename}")
 async def delete_document(
     session_id: str,
     filename: str,

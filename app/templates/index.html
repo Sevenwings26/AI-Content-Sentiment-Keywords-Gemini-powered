@@ -462,7 +462,7 @@
         <div class="sidebar-header">
             <button class="new-chat-btn" onclick="createNewChat()">+ New Chat</button>
         </div>
-        <div class="sessions-list">
+        <div class="sessions-list" id="sessions-list">
             {% for s in sessions %}
             <div class="session-item-container {% if s.id == session_id %}active{% endif %}" id="session-item-{{ s.id }}">
                 <a href="/chat/{{ s.id }}" class="session-item">
@@ -641,7 +641,10 @@
                     const containerDiv = document.createElement("div");
                     containerDiv.className = "session-item-container " + (s.id === sessionId ? "active" : "");
                     containerDiv.id = "session-item-" + s.id;
-                    containerDiv.innerHTML = '<a href="/chat/' + s.id + '" class="session-item">' + (s.title || "Untitled Chat") + '</a><button class="delete-btn" onclick="deleteChat('' + s.id + '', event)" title="Delete Chat">🗑️</button>';
+                    containerDiv.innerHTML = `
+                        <a href="/chat/${s.id}" class="session-item">${s.title || "Untitled Chat"}</a>
+                        <button class="delete-btn" onclick="deleteChat('${s.id}', event)" title="Delete Chat & Files">🗑️</button>
+                    `;
                     sessionsList.appendChild(containerDiv);
                 });
             } catch (err) {

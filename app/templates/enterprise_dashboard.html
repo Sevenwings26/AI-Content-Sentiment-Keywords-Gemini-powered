@@ -850,9 +850,13 @@
             if (!options.headers) options.headers = {};
             if (adminToken) options.headers["Authorization"] = "Bearer " + adminToken;
             const res = await fetch(endpoint, options);
-            if (res.status === 401 || res.status === 403) {
-                alert("Session expired or access denied. Please sign in as an Admin.");
+            if (res.status === 401) {
+                alert("Session expired. Please sign in again.");
                 window.location.href = "/enterprise/login";
+                return null;
+            }
+            if (res.status === 403) {
+                console.warn(`Access forbidden for endpoint: ${endpoint}`);
                 return null;
             }
             if (!res.ok) {
@@ -1002,21 +1006,26 @@
                     document.getElementById("jobs-table-body").innerHTML = jobsHtml || "<tr><td colspan='6'>No jobs found</td></tr>";
                 }
 
-                // 8. SIEM Logs
-                const logs = await fetchAPI("/enterprise/audit/logs");
-                if (logs) {
-                    let siemHtml = "";
-                    logs.forEach(l => {
-                        siemHtml += `
-                            <div class="siem-line">
-                                <span class="siem-time">[${new Date(l.created_at).toISOString()}]</span>
-                                <span class="siem-action">${l.action}</span> |
-                                <span>User: ${l.user_id || 'system'}</span> |
-                                <span class="siem-details">${JSON.stringify(l.details)}</span>
-                            </div>
-                        `;
-                    });
-                    document.getElementById("siem-log-box").innerHTML = siemHtml || "<div class='siem-line'>No audit events recorded.</div>";
+                // 8. SIEM Logs (Load only if permitted)
+                const currentUser = JSON.parse(localStorage.getItem("enterprise_user") || "{}");
+                if (currentUser.role === "SUPER_ADMIN" || currentUser.role === "AUDITOR") {
+                    const logs = await fetchAPI("/enterprise/audit/logs");
+                    if (logs) {
+                        let siemHtml = "";
+                        logs.forEach(l => {
+                            siemHtml += `
+                                <div class="siem-line">
+                                    <span class="siem-time">[${new Date(l.created_at).toISOString()}]</span>
+                                    <span class="siem-action">${l.action}</span> |
+                                    <span>User: ${l.user_id || 'system'}</span> |
+                                    <span class="siem-details">${JSON.stringify(l.details)}</span>
+                                </div>
+                            `;
+                        });
+                        document.getElementById("siem-log-box").innerHTML = siemHtml || "<div class='siem-line'>No audit events recorded.</div>";
+                    }
+                } else {
+                    document.getElementById("siem-log-box").innerHTML = "<div class='siem-line' style='color: #94a3b8;'>SIEM Audit Trail is restricted to SuperAdmins and Auditors.</div>";
                 }
 
             } catch (err) {
