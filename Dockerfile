@@ -2,6 +2,7 @@
 FROM python:3.12-slim
 
 WORKDIR /app
+ENV PYTHONPATH=/app
 
 # Install system dependencies needed to build packages like psycopg2
 RUN apt-get update && apt-get install -y \

@@ -7,10 +7,11 @@ from sqlalchemy import (
     Column, String, Text, ForeignKey, DateTime, Boolean, 
     Enum, Index, Integer, JSON
 )
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship
+from app.database import Base
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
-Base = declarative_base()
+# Base imported from app.database
 
 # --- Enums ---
 
@@ -49,7 +50,7 @@ class Organization(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(255), nullable=False)
     slug = Column(String(100), unique=True, nullable=False, index=True)
-    sso_domain = Column(String(255), nullable=True) # e.g. 'acme.com' for SSO routing
+    sso_domain = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -88,12 +89,11 @@ class User(Base):
     org_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     department_id = Column(String(36), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
     email = Column(String(255), nullable=False, index=True)
-    hashed_password = Column(String(255), nullable=True) # Nullable if SSO is enforced
+    hashed_password = Column(String(255), nullable=True)
     full_name = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), default=UserRole.MEMBER, nullable=False)
     
-    # SSO / OIDC linkage
-    sso_provider = Column(String(50), nullable=True) # 'google', 'okta', 'azure_ad', 'saml'
+    sso_provider = Column(String(50), nullable=True)
     sso_subject_id = Column(String(255), nullable=True, index=True)
     
     is_active = Column(Boolean, default=True, nullable=False)
@@ -122,7 +122,7 @@ class EnterpriseDocument(Base):
     uploader_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     
     filename = Column(String(255), nullable=False)
-    file_hash = Column(String(64), nullable=False, index=True) # SHA-256
+    file_hash = Column(String(64), nullable=False, index=True)
     file_size_bytes = Column(Integer, nullable=False)
     mime_type = Column(String(100), nullable=False)
     
@@ -153,7 +153,6 @@ class EnterpriseChatSession(Base):
     is_archived = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Relationships
     user = relationship("User", back_populates="sessions")
     messages = relationship("EnterpriseChatMessage", back_populates="session", cascade="all, delete-orphan")
 
@@ -164,10 +163,9 @@ class EnterpriseChatMessage(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     session_id = Column(String(36), ForeignKey("enterprise_chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
-    role = Column(String(50), nullable=False) # 'user', 'assistant', 'system'
+    role = Column(String(50), nullable=False)
     content = Column(Text, nullable=False)
     
-    # Traceability: Stored JSON of retrieved chunk IDs, source document IDs, and confidence scores
     citation_metadata = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -184,18 +182,56 @@ class IngestionJob(Base):
     created_by_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
     name = Column(String(255), nullable=False)
-    source_type = Column(String(50), nullable=False) # 's3', 'relational_db', 'file'
+    source_type = Column(String(50), nullable=False)
     access_level = Column(Enum(AccessLevel), default=AccessLevel.DEPARTMENT, nullable=False)
     
-    # Store connection parameters (e.g. bucket_name, db_connection_url, sql_query, prefix)
     connection_config = Column(JSON, nullable=False)
-    cron_schedule = Column(String(100), nullable=True) # e.g. '0 0 * * *' for daily sync
+    cron_schedule = Column(String(100), nullable=True)
     
     status = Column(Enum(IngestionJobStatus), default=IngestionJobStatus.PENDING, nullable=False)
     last_run_at = Column(DateTime, nullable=True)
     documents_processed_count = Column(Integer, default=0, nullable=False)
     error_message = Column(Text, nullable=True)
     
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# --- Persona & Prompt Governance ---
+
+class AssistantPersona(Base):
+    """Admin-managed persona defining system instructions, domain focus, and temperature per department."""
+    __tablename__ = "assistant_personas"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    department_id = Column(String(36), ForeignKey("departments.id", ondelete="CASCADE"), nullable=True, index=True) # Nullable = tenant-wide
+    created_by_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    name = Column(String(255), nullable=False) # e.g. "Strict Legal Advisor", "Engineering Architecture Expert"
+    description = Column(Text, nullable=True)
+    system_instruction_template = Column(Text, nullable=False) # Supports {department_name}, {user_name}, {user_role}, {org_name}
+    temperature = Column(Integer, default=2, nullable=False) # 2 = 0.2
+    
+    is_default = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PromptTemplate(Base):
+    """Admin-managed structured prompt template for specific workflows."""
+    __tablename__ = "prompt_templates"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    org_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    department_id = Column(String(36), ForeignKey("departments.id", ondelete="CASCADE"), nullable=True, index=True)
+    persona_id = Column(String(36), ForeignKey("assistant_personas.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    title = Column(String(255), nullable=False) # e.g. "Contract Risk Assessment Template"
+    user_prompt_template = Column(Text, nullable=False) # Supports {query}, {context}, {user_name}, {department_name}
+    category = Column(String(50), default="QNA", nullable=False) # 'QNA', 'SUMMARIZATION', 'ANALYSIS', 'CODE'
+    
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -209,11 +245,11 @@ class AuditLog(Base):
     org_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     
-    action = Column(String(100), nullable=False, index=True) # e.g. 'DOCUMENT_INGEST', 'RAG_QUERY', 'SESSION_DELETE'
-    resource_type = Column(String(50), nullable=False)      # 'DOCUMENT', 'VECTOR_POINT', 'CHAT_SESSION'
+    action = Column(String(100), nullable=False, index=True)
+    resource_type = Column(String(50), nullable=False)
     resource_id = Column(String(255), nullable=True)
     
-    details = Column(JSON, nullable=True)                   # Query text, retrieved chunk IDs, IP address, user-agent
+    details = Column(JSON, nullable=True)
     ip_address = Column(String(45), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 

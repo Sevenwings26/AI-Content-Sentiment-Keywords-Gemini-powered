@@ -1,4 +1,4 @@
-# app/services/rag.py
+﻿# app/services/rag.py
 import os
 import uuid
 import logging
@@ -14,17 +14,19 @@ from qdrant_client.models import (
 from app.services.llm import BaseLLMService
 from app.services.reranker import CrossEncoderReranker
 from app.services.security_filter import RAGSecurityFilterBuilder
+from app.services.prompt_engine import PromptEngine
 from app.parsers.factory import ParserFactory
 from app.connectors.file_connector import FileConnector
 from app.core.audit import AuditLogger
 from app.core.security import TokenData
-from app.models.enterprise_models import UserRole
+from app.models.enterprise_models import UserRole, AssistantPersona, PromptTemplate, Organization, Department
 
 logger = logging.getLogger("rag_service")
 
 class RAGService:
     # Class-level client singleton cache to prevent locking conflicts
     _qdrant_client = None
+    _collection_checked = False
 
     def __init__(self, llm_service: BaseLLMService):
         self.llm = llm_service
@@ -49,6 +51,8 @@ class RAGService:
         self._ensure_collection_exists()
 
     def _ensure_collection_exists(self):
+        if RAGService._collection_checked:
+            return
         """
         Ensures that the target collection exists in Qdrant with matching vector dimensions
         and payload indexes for fast O(1) multi-tenant & RBAC pre-filtering.
@@ -85,7 +89,8 @@ class RAGService:
                     field_schema=schema_type
                 )
             except Exception:
-                pass  # Index already exists
+                pass
+        RAGService._collection_checked = True
 
     def extract_text_from_file(self, filename: str, file_bytes: bytes, mime_type: str = None) -> str:
         """Parses PDF, DOCX, TXT, MD, CSV, JSON using ParserFactory."""
@@ -104,7 +109,7 @@ class RAGService:
                 chunks.append(chunk)
         return chunks
 
-    # --- Enterprise Ingestion Pipeline ---
+    # --- Enterprise Multi-Tenant Document Ingestion ---
 
     def ingest_enterprise_document(
         self,
@@ -115,12 +120,11 @@ class RAGService:
         department_id: str,
         uploader_id: str,
         access_level: str,
-        session_id: Optional[str] = None,
-        mime_type: Optional[str] = None
+        mime_type: str = None
     ) -> int:
         """
-        Ingests document chunks tagged with enterprise multi-tenant metadata:
-        org_id, department_id, uploader_id, access_level, document_id.
+        Ingests enterprise documents into Qdrant with tenant, department, uploader,
+        and ACL payload metadata tags for zero-leakage security filtering.
         """
         connector = FileConnector(filename=filename, content_bytes=file_bytes, mime_type=mime_type)
         raw_doc = next(connector.fetch_documents())
@@ -141,13 +145,11 @@ class RAGService:
                     id=point_id,
                     vector=embedding,
                     payload={
-                        "point_id": point_id,
                         "document_id": document_id,
                         "org_id": org_id,
                         "department_id": department_id,
                         "uploader_id": uploader_id,
                         "access_level": access_level,
-                        "session_id": session_id,
                         "filename": filename,
                         "chunk_index": idx,
                         "content": chunk,
@@ -238,7 +240,7 @@ class RAGService:
             logger.error(f"Error purging Qdrant vectors for document {document_id}: {e}")
             return False
 
-    # --- Enterprise Scoped Query Execution ---
+    # --- Enterprise Scoped Query Execution with Persona & Template Engine ---
 
     def query_enterprise(
         self,
@@ -247,19 +249,58 @@ class RAGService:
         session_id: Optional[str],
         db: Session,
         top_k: int = 3,
-        score_threshold: float = 0.30
+        score_threshold: float = 0.30,
+        persona_id: Optional[str] = None,
+        template_id: Optional[str] = None
     ) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Executes an enterprise RAG query:
         1. Builds unbypassable multi-tenant security filter based on user's verified token.
-        2. Retrieves candidate vectors from Qdrant strictly within org/dept/role boundary.
-        3. Re-ranks candidates with FlashRank Cross-Encoder.
-        4. Injects verified citations into grounded prompt.
-        5. Emits compliance audit log.
+        2. Resolves Persona system instruction template & interpolates user/department variables.
+        3. Retrieves candidate vectors strictly within org/dept/role boundary.
+        4. Re-ranks candidates with FlashRank Cross-Encoder.
+        5. Injects verified citations into grounded prompt (interpolated via PromptTemplate if provided).
+        6. Emits compliance audit log.
         """
+        org_name = ""
+        dept_name = ""
+        if db:
+            org = db.query(Organization).filter(Organization.id == user_context.org_id).first()
+            if org:
+                org_name = org.name
+            if user_context.department_id:
+                dept = db.query(Department).filter(Department.id == user_context.department_id).first()
+                if dept:
+                    dept_name = dept.name
+
+        system_template = (
+            "You are a helpful enterprise knowledge assistant for {org_name}. Answer the user's question "
+            "truthfully using ONLY the provided verified Context block. Cite source documents. "
+            "If the answer cannot be found in the Context, state clearly that the knowledge base "
+            "does not contain this information."
+        )
+
+        if persona_id and db:
+            persona = db.query(AssistantPersona).filter(
+                AssistantPersona.id == persona_id,
+                AssistantPersona.org_id == user_context.org_id,
+                AssistantPersona.is_active == True
+            ).first()
+            if persona:
+                system_template = persona.system_instruction_template
+
+        template_vars = {
+            "user_name": user_context.email.split("@")[0],
+            "user_role": user_context.role,
+            "department_name": dept_name or "General",
+            "org_name": org_name,
+            "query": query
+        }
+        system_instruction = PromptEngine.render_template(system_template, template_vars)
+
         query_embedding = self.llm.get_embeddings(query)
         
-        # 1. Unbypassable Multi-Tenant Security Filter
+        # Unbypassable Multi-Tenant Security Filter
         security_filter = RAGSecurityFilterBuilder.build_search_filter(
             org_id=user_context.org_id,
             department_id=user_context.department_id or "",
@@ -268,7 +309,6 @@ class RAGService:
             session_id=session_id
         )
 
-        # 2. Vector Candidate Pool Retrieval (limit=15)
         response = self.qdrant.query_points(
             collection_name=self.collection_name,
             query=query_embedding,
@@ -277,14 +317,11 @@ class RAGService:
         )
         results = response.points
 
-        # 3. Score Threshold Filter
         relevant_results = [p for p in results if p.score >= score_threshold]
         if not relevant_results:
-            system_instruction = "You are a helpful enterprise knowledge assistant."
             answer = self.llm.generate_text(query, system_instruction=system_instruction)
             return answer, []
 
-        # 4. Cross-Encoder Re-ranking Stage
         candidate_chunks = [
             {
                 "id": str(p.id),
@@ -297,7 +334,6 @@ class RAGService:
 
         reranked_chunks = self.reranker.rerank(query=query, candidate_chunks=candidate_chunks, top_n=top_k)
 
-        # 5. Grounded Prompt Context Construction
         context_block = ""
         sources = []
         retrieved_doc_ids = []
@@ -315,17 +351,19 @@ class RAGService:
                 "relevance_score": float(chunk.get("score", 0.0))
             })
 
-        system_instruction = (
-            "You are a helpful enterprise knowledge assistant. Answer the user's question "
-            "truthfully using ONLY the provided verified Context block. Cite source documents. "
-            "If the answer cannot be found in the Context, state clearly that the knowledge base "
-            "does not contain this information."
-        )
-        
-        prompt = f"Context:\n{context_block}\n\nUser Question: {query}"
-        answer = self.llm.generate_text(prompt, system_instruction=system_instruction)
+        user_prompt_str = f"Context:\n{context_block}\n\nUser Question: {query}"
+        if template_id and db:
+            p_template = db.query(PromptTemplate).filter(
+                PromptTemplate.id == template_id,
+                PromptTemplate.org_id == user_context.org_id,
+                PromptTemplate.is_active == True
+            ).first()
+            if p_template:
+                template_vars["context"] = context_block
+                user_prompt_str = PromptEngine.render_template(p_template.user_prompt_template, template_vars)
 
-        # 6. Audit Logging for Compliance
+        answer = self.llm.generate_text(user_prompt_str, system_instruction=system_instruction)
+
         AuditLogger.log(
             db=db,
             org_id=user_context.org_id,
@@ -335,6 +373,8 @@ class RAGService:
             resource_id=session_id,
             details={
                 "query": query[:200],
+                "persona_id": persona_id,
+                "template_id": template_id,
                 "retrieved_documents": retrieved_doc_ids,
                 "sources_count": len(sources)
             }

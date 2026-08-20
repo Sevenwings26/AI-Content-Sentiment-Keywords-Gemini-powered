@@ -1,6 +1,5 @@
-﻿# app/parsers/docx_parser.py
+# app/parsers/docx_parser.py
 from io import BytesIO
-import docx
 from app.parsers.base import BaseParser
 
 class DocxParser(BaseParser):
@@ -8,6 +7,11 @@ class DocxParser(BaseParser):
     Parser for Microsoft Word (.docx) documents using python-docx.
     """
     def parse(self, content_bytes: bytes) -> str:
+        try:
+            import docx
+        except ImportError:
+            raise ImportError("python-docx is not installed. Run `pip install python-docx` to parse DOCX files.")
+
         doc = docx.Document(BytesIO(content_bytes))
         full_text = []
         for para in doc.paragraphs:

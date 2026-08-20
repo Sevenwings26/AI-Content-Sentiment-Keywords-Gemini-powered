@@ -17,6 +17,8 @@ class ChatSession(Base):
 
     # String(36) is cross-compatible between SQLite and PostgreSQL for UUID strings
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=True, index=True)
+    org_id = Column(String(36), nullable=True, index=True)
     title = Column(String(255), default="New Chat Session")
     created_at = Column(DateTime, default=datetime.utcnow)
 

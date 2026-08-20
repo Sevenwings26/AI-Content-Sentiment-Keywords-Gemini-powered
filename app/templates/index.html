@@ -1,4 +1,4 @@
-﻿<!-- app/templates/index.html -->
+<!-- app/templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 
@@ -211,6 +211,77 @@
             border-radius: 50%;
         }
 
+        /* Role-Based Nav Actions */
+        .admin-dashboard-link {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: linear-gradient(135deg, #0284c7, #6366f1);
+            color: #ffffff;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .admin-dashboard-link:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .user-profile-badge {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 12px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        .user-role-tag {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 6px;
+            background: rgba(56, 189, 248, 0.15);
+            color: #0284c7;
+            text-transform: uppercase;
+        }
+
+        .auth-nav-btn {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-main);
+            transition: all 0.2s ease;
+        }
+
+        .auth-nav-btn:hover {
+            background-color: var(--border-color);
+        }
+
+        .auth-nav-btn.login-btn {
+            background: #000;
+            color: #fff;
+            border-color: #000;
+        }
+
+        .auth-nav-btn.login-btn:hover {
+            opacity: 0.85;
+        }
+
         /* Chat Feed */
         .chat-feed {
             flex: 1;
@@ -415,15 +486,32 @@
             </div>
 
             <div class="workspace-actions">
+                <!-- Role-Based Admin Dashboard Entry (Visible only to SUPER_ADMIN and DEPT_ADMIN) -->
+                <a href="/enterprise/dashboard" id="nav-admin-btn" class="admin-dashboard-link">
+                    ⚙️ Enterprise Dashboard
+                </a>
+
+                <!-- User Profile & Clearance Badge -->
+                <div id="nav-user-badge" class="user-profile-badge">
+                    <span id="nav-user-name">User</span>
+                    <span id="nav-user-role" class="user-role-tag">MEMBER</span>
+                </div>
+
+                <!-- Auth Navigation (Login / Sign Out) -->
+                <div id="nav-auth-container">
+                    <a href="/enterprise/login" id="nav-login-btn" class="auth-nav-btn login-btn">🔑 Sign In</a>
+                    <button id="nav-logout-btn" class="auth-nav-btn" style="display: none;" onclick="handleUserLogout()">Sign Out</button>
+                </div>
+
                 {% if session_id %}
                 <button class="header-delete-btn" id="header-delete-btn" onclick="deleteChat('{{ session_id }}')" title="Delete Chat Session and Attached Files">
-                    🗑️ Delete Session
+                    🗑️ Delete
                 </button>
                 {% endif %}
 
                 <div class="model-badge">
                     <span class="status-dot"></span>
-                    <span>Grounded Context (RAG)</span>
+                    <span>RAG Engine</span>
                 </div>
             </div>
         </div>
@@ -494,8 +582,74 @@
         let sessionId = "{{ session_id if session_id else '' }}";
         const chatFeed = document.getElementById("chat-feed");
 
+        // Initialize user authentication and role badge
+        function initAuthState() {
+            const userStr = localStorage.getItem("enterprise_user");
+            const token = localStorage.getItem("enterprise_token");
+            if (userStr && token) {
+                try {
+                    const user = JSON.parse(userStr);
+                    document.getElementById("nav-user-name").innerText = user.full_name || user.email;
+                    document.getElementById("nav-user-role").innerText = user.role || "MEMBER";
+                    document.getElementById("nav-user-badge").style.display = "flex";
+                    document.getElementById("nav-login-btn").style.display = "none";
+                    document.getElementById("nav-logout-btn").style.display = "inline-block";
+
+                    // Role-Based Admin Entry: Visible ONLY to SUPER_ADMIN & DEPT_ADMIN
+                    if (user.role === "SUPER_ADMIN" || user.role === "DEPT_ADMIN") {
+                        document.getElementById("nav-admin-btn").style.display = "inline-flex";
+                    } else {
+                        document.getElementById("nav-admin-btn").style.display = "none";
+                    }
+                } catch(e) {}
+            } else {
+                document.getElementById("nav-user-badge").style.display = "none";
+                document.getElementById("nav-admin-btn").style.display = "none";
+                document.getElementById("nav-login-btn").style.display = "inline-block";
+                document.getElementById("nav-logout-btn").style.display = "none";
+            }
+        }
+
+        function handleUserLogout() {
+            localStorage.removeItem("enterprise_token");
+            localStorage.removeItem("enterprise_admin_token");
+            localStorage.removeItem("enterprise_user");
+            window.location.href = "/enterprise/login";
+        }
+
         // Scroll chat feed to bottom on load
         chatFeed.scrollTop = chatFeed.scrollHeight;
+        initAuthState();
+
+        // Load User Scoped Sessions dynamically
+        async function loadUserSessions() {
+            const token = localStorage.getItem("enterprise_token");
+            if (!token) return;
+
+            try {
+                const response = await fetch("/chat/sessions", {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                if (!response.ok) return;
+                const userSessions = await response.json();
+
+                const sessionsList = document.getElementById("sessions-list");
+                if (!sessionsList) return;
+
+                sessionsList.innerHTML = "";
+                userSessions.forEach(s => {
+                    const containerDiv = document.createElement("div");
+                    containerDiv.className = "session-item-container " + (s.id === sessionId ? "active" : "");
+                    containerDiv.id = "session-item-" + s.id;
+                    containerDiv.innerHTML = '<a href="/chat/' + s.id + '" class="session-item">' + (s.title || "Untitled Chat") + '</a><button class="delete-btn" onclick="deleteChat('' + s.id + '', event)" title="Delete Chat">🗑️</button>';
+                    sessionsList.appendChild(containerDiv);
+                });
+            } catch (err) {
+                console.error("Failed to load user sessions:", err);
+            }
+        }
+        window.addEventListener("DOMContentLoaded", loadUserSessions);
+
 
         // Redirect to create a clean unpersisted session
         function createNewChat() {
@@ -575,7 +729,9 @@
             statusLabel.innerText = `Indexing "${file.name}"...`;
 
             try {
-                const response = await fetch("/chat/upload", {
+                const token = localStorage.getItem("enterprise_token"); const headers = {}; if (token) headers["Authorization"] = "Bearer " + token;
+            const response = await fetch("/chat/upload", {
+                headers: headers,
                     method: "POST",
                     body: formData
                 });
@@ -636,9 +792,15 @@
             const loadingBubbleId = appendMessage("assistant", "Thinking...");
 
             try {
+                const headers = { "Content-Type": "application/json" };
+                const token = localStorage.getItem("enterprise_token");
+                if (token) {
+                    headers["Authorization"] = "Bearer " + token;
+                }
+
                 const response = await fetch("/chat/query", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: headers,
                     body: JSON.stringify({ query: query, session_id: sessionId })
                 });
                 const data = await response.json();
@@ -671,7 +833,9 @@
             }
 
             try {
-                const response = await fetch("/chat/" + targetSessionId, {
+                const token = localStorage.getItem("enterprise_token"); const headers = {}; if (token) headers["Authorization"] = "Bearer " + token;
+            const response = await fetch("/chat/" + targetSessionId, {
+                headers: headers,
                     method: "DELETE"
                 });
                 const data = await response.json();

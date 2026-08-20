@@ -1,10 +1,11 @@
-﻿from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session
+from typing import Optional
 from app import models
 
 # --- RAG Session CRUD ---
 
-def create_chat_session(db: Session, title: str = "New Chat Session"):
-    db_session = models.ChatSession(title=title)
+def create_chat_session(db: Session, title: str = "New Chat Session", user_id: Optional[str] = None, org_id: Optional[str] = None):
+    db_session = models.ChatSession(title=title, user_id=user_id, org_id=org_id)
     db.add(db_session)
     db.commit()
     db.refresh(db_session)
@@ -13,8 +14,17 @@ def create_chat_session(db: Session, title: str = "New Chat Session"):
 def get_chat_session(db: Session, session_id: str):
     return db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
 
+def get_user_chat_sessions(db: Session, user_id: Optional[str] = None, org_id: Optional[str] = None):
+    query = db.query(models.ChatSession)
+    if user_id:
+        query = query.filter(models.ChatSession.user_id == user_id)
+    elif org_id:
+        query = query.filter(models.ChatSession.org_id == org_id)
+    else:
+        query = query.filter(models.ChatSession.user_id.is_(None))
+    return query.order_by(models.ChatSession.created_at.desc()).all()
+
 def delete_chat_session(db: Session, session_id: str) -> bool:
-    """Deletes a chat session from PostgreSQL (cascading to messages and document metadata)."""
     db_session = get_chat_session(db, session_id)
     if db_session:
         db.delete(db_session)
@@ -32,7 +42,6 @@ def create_chat_message(db: Session, session_id: str, role: str, content: str):
     return db_message
 
 def get_chat_messages(db: Session, session_id: str):
-    """Retrieves all messages for a specific session ordered by creation time."""
     return (
         db.query(models.ChatMessage)
         .filter(models.ChatMessage.session_id == session_id)
@@ -53,7 +62,6 @@ def get_chat_documents(db: Session, session_id: str):
     return db.query(models.ChatDocument).filter(models.ChatDocument.session_id == session_id).all()
 
 def delete_chat_document(db: Session, session_id: str, filename: str) -> bool:
-    """Deletes a specific document metadata record for a session from PostgreSQL."""
     doc = (
         db.query(models.ChatDocument)
         .filter(

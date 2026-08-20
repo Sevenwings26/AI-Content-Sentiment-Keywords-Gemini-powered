@@ -28,6 +28,8 @@
       - "4500:4500"
     volumes:
       - .:/app
+    environment:
+      - PYTHONPATH=/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 4500 --reload
     env_file:
       - .env
@@ -46,6 +48,8 @@
     container_name: wings_ingestion_worker
     volumes:
       - .:/app
+    environment:
+      - PYTHONPATH=/app
     command: celery -A app.core.celery_app worker --loglevel=info
     env_file:
       - .env
