@@ -1,4 +1,4 @@
-﻿services:
+services:
   # 1. Qdrant Vector Database Service
   qdrant:
     image: qdrant/qdrant:latest
