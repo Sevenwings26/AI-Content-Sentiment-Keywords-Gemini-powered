@@ -30,7 +30,7 @@ services:
       - .:/app
     environment:
       - PYTHONPATH=/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 4500 --reload
+    command: python -m uvicorn app.main:app --app-dir /app --host 0.0.0.0 --port 4500 --reload
     env_file:
       - .env
     extra_hosts:
@@ -50,7 +50,7 @@ services:
       - .:/app
     environment:
       - PYTHONPATH=/app
-    command: celery -A app.core.celery_app worker --loglevel=info
+    command: python -m celery -A app.core.celery_app worker --loglevel=info
     env_file:
       - .env
     extra_hosts:
