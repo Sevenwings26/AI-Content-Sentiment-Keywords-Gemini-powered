@@ -23,7 +23,8 @@ app.add_middleware(
 # models.Base.metadata.create_all(bind=database.engine)
 
 # Register Router Modules
-app.include_router(content_analyse.router)
+# app.include_router(content_analyse.router)
 app.include_router(rag.router)
 app.include_router(enterprise_rag.router)
+
 
