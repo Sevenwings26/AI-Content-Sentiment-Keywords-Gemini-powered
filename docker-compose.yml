@@ -50,7 +50,7 @@ services:
       - .:/app
     environment:
       - PYTHONPATH=/app
-    command: python -m celery -A app.core.celery_app worker --loglevel=info
+    command: python -m celery -A modules.tasks.celery_app worker --loglevel=info
     env_file:
       - .env
     extra_hosts:

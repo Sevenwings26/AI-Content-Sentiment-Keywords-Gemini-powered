@@ -1,13 +1,13 @@
 # app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app import models, database
-from app.routes import content_analyse, rag, enterprise_rag
+from core.config import settings
+from app.routes import auth, chat, documents, governance, jobs, audit, views
 
 app = FastAPI(
-    title="Enterprise Multi-Tenant AI & RAG Platform",
-    version="2.0.0",
-    description="Enterprise-grade RAG pipeline with Multi-Tenancy, RBAC, Payload Isolation, and Re-ranking."
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    description="Enterprise-grade Unified Cognitive RAG Platform with Multi-Source Retrieval, Dynamic RBAC, and Grounding Guardrails."
 )
 
 # Middleware
@@ -19,12 +19,20 @@ app.add_middleware(
     allow_methods=["*"],
 )
 
-# Run table creation for all registered models
-# models.Base.metadata.create_all(bind=database.engine)
+# Register Modular Routers
+app.include_router(views.router)
+app.include_router(auth.router)
+app.include_router(chat.router)
+app.include_router(documents.router)
+app.include_router(governance.router)
+app.include_router(jobs.router)
+app.include_router(audit.router)
 
-# Register Router Modules
-# app.include_router(content_analyse.router)
-app.include_router(rag.router)
-app.include_router(enterprise_rag.router)
-
-
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "llm_provider": settings.LLM_PROVIDER
+    }
