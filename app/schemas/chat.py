@@ -16,6 +16,7 @@ class ChatQueryPayload(BaseModel):
     template_id: Optional[str] = Field(None, description="Optional Prompt Template ID")
     top_k: int = Field(3, description="Number of final context chunks after reranking")
     score_threshold: float = Field(0.35, description="Minimum similarity score threshold")
+    mode: Optional[str] = Field("auto", description="Execution mode: 'auto', 'rag', 'general'")
 
 class SourceCitation(BaseModel):
     filename: str

@@ -1,0 +1,23 @@
+<!-- app/templates/components/tables/siem_panel.html -->
+<div id="tab-siem" class="tab-content">
+    <div class="table-container" style="padding: 24px;">
+        <div class="flex items-center justify-between" style="margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+            <div>
+                <h2 style="font-size: 16px; font-weight: 600;">Real-Time Compliance SIEM Telemetry Log</h2>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Immutable audit trail of access requests, vector queries, uploads, and administrative actions</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="badge badge-acl-public flex items-center gap-1">
+                    <span style="width: 6px; height: 6px; border-radius: 50%; background-color: var(--color-success);"></span>
+                    <span>Live Telemetry Feed</span>
+                </span>
+                <button type="button" class="btn btn-outline btn-sm" onclick="fetchSIEMLogs(true)">
+                    <span>🔄 Refresh Log</span>
+                </button>
+            </div>
+        </div>
+        <div id="siem-log-box" style="background-color: #060910; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 18px; font-family: var(--font-mono); font-size: 12px; color: #38BDF8; height: 480px; overflow-y: auto;">
+            <div style="color: #64748B;">[SYSTEM] Initializing SIEM Telemetry Stream...</div>
+        </div>
+    </div>
+</div>

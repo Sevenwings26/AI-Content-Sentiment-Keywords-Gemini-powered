@@ -1,0 +1,47 @@
+<!-- app/templates/components/modals/job_modal.html -->
+<div id="job-modal" class="modal-backdrop" onclick="if(event.target === this) closeModal('job-modal')">
+    <div class="modal-box">
+        <div class="modal-header">
+            <div>
+                <h3 class="modal-title">Create Data Source Connector Job</h3>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Automated ingestion pipeline from enterprise cloud & database stores</p>
+            </div>
+            <button type="button" class="modal-close" onclick="closeModal('job-modal')" aria-label="Close modal">&times;</button>
+        </div>
+        <form id="create-job-form" onsubmit="handleCreateJob(event)">
+            <div class="form-group">
+                <label class="form-label" for="job-name">Job Name</label>
+                <input type="text" id="job-name" class="form-input" placeholder="e.g. Engineering S3 Sync" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="job-source-type">Source Connector Type</label>
+                <select id="job-source-type" class="form-select">
+                    <option value="S3_BUCKET">Amazon AWS S3 Bucket</option>
+                    <option value="GOOGLE_DRIVE">Google Workspace Drive</option>
+                    <option value="POSTGRES_DB">PostgreSQL Knowledge Source</option>
+                    <option value="CONFLUENCE">Atlassian Confluence Space</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="job-acl">Security Access Level (ACL)</label>
+                <select id="job-acl" class="form-select">
+                    <option value="DEPARTMENT">DEPARTMENT (Target Department Only)</option>
+                    <option value="PUBLIC">PUBLIC (Tenant-Wide Searchable)</option>
+                    <option value="CONFIDENTIAL">CONFIDENTIAL (Privileged Access)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="job-dept-select">Target Department</label>
+                <select id="job-dept-select" class="form-select"></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="job-config">Connection Configuration (JSON)</label>
+                <textarea id="job-config" class="form-textarea" rows="3" style="font-family: var(--font-mono); font-size: 12px;" placeholder='{"bucket_name": "acme-knowledge", "region": "us-east-1", "prefix": "docs/"}' required></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('job-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="btn-submit-job">Create Job</button>
+            </div>
+        </form>
+    </div>
+</div>

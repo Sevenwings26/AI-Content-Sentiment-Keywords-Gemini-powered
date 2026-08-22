@@ -43,6 +43,10 @@ class UserRepository:
         return db.query(Department).filter(Department.org_id == org_id).all()
 
     @staticmethod
+    def list_org_users(db: Session, org_id: str) -> List[User]:
+        return db.query(User).filter(User.org_id == org_id, User.is_active == True).all()
+
+    @staticmethod
     def create_user(
         db: Session,
         org_id: str,

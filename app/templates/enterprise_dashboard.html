@@ -1,1179 +1,762 @@
 <!-- app/templates/enterprise_dashboard.html -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Governance & Admin Control Center</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-dark: #090d16;
-            --sidebar-bg: #0f172a;
-            --card-bg: rgba(22, 30, 46, 0.75);
-            --card-hover: rgba(30, 41, 59, 0.85);
-            --border-color: rgba(255, 255, 255, 0.1);
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --accent-blue: #38bdf8;
-            --accent-green: #34d399;
-            --accent-purple: #c084fc;
-            --accent-red: #f87171;
-            --accent-gradient: linear-gradient(135deg, #0284c7, #6366f1);
-            --input-bg: rgba(15, 23, 42, 0.8);
-        }
+{% extends "base.html" %}
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+{% block title %}Enterprise Governance & Admin Control Center - Multi-Tenant RAG Platform{% endblock %}
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
+{% block extra_head %}
+<style>
+    .dashboard-layout {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        background-color: var(--bg-canvas);
+    }
 
-        /* Top Header */
-        header {
-            padding: 16px 32px;
-            background: rgba(15, 23, 42, 0.95);
-            backdrop-filter: blur(16px);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
+    /* Top Navigation Header */
+    .dashboard-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background-color: var(--bg-surface);
+        border-bottom: 1px solid var(--border-subtle);
+        padding: 14px 32px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+    }
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
+    .brand-section {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
 
-        .brand-badge {
-            background: var(--accent-gradient);
-            padding: 6px 14px;
-            border-radius: 8px;
-            font-weight: 700;
-            font-size: 13px;
-            letter-spacing: 0.5px;
-            color: #fff;
-            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
-        }
+    .brand-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background-color: var(--accent-primary);
+        color: var(--accent-primary-text);
+        padding: 5px 12px;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
 
-        .tenant-title h1 { font-size: 17px; font-weight: 600; }
-        .tenant-title p { font-size: 12px; color: var(--text-muted); }
+    .dashboard-container {
+        flex: 1;
+        max-width: 1440px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 28px 32px;
+    }
 
-        .auth-bar { display: flex; align-items: center; gap: 12px; }
+    /* Metrics Grid */
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 16px;
+        margin-bottom: 28px;
+    }
 
-        .nav-btn {
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--text-main);
-            border: 1px solid var(--border-color);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s ease;
-        }
+    .metric-card {
+        background-color: var(--bg-surface-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        transition: transform var(--transition-fast), border-color var(--transition-fast);
+    }
 
-        .nav-btn:hover {
-            background: rgba(255, 255, 255, 0.12);
-            color: var(--accent-blue);
-        }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--text-muted);
+    }
 
-        .nav-btn.primary {
-            background: var(--accent-gradient);
-            border: none;
-            color: #fff;
-            font-weight: 600;
-        }
+    .metric-title {
+        font-size: 11px;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+    }
 
-        .nav-btn.danger:hover {
-            color: var(--accent-red);
-            border-color: rgba(248, 113, 113, 0.4);
-        }
+    .metric-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-top: 6px;
+        line-height: 1.1;
+    }
 
-        /* Dashboard Container */
-        .dashboard-container {
-            flex: 1;
-            padding: 28px 32px;
-            max-width: 1440px;
-            margin: 0 auto;
-            width: 100%;
-        }
+    /* Tabs Navigation */
+    .tabs-nav {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--border-subtle);
+        margin-bottom: 24px;
+        overflow-x: auto;
+        padding-bottom: 1px;
+    }
 
-        /* Metric Cards Grid */
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 28px;
-        }
+    .tab-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        padding: 12px 18px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all var(--transition-fast);
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .metric-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            padding: 18px 20px;
-            backdrop-filter: blur(10px);
-            transition: transform 0.2s ease, border-color 0.2s ease;
-        }
+    .tab-btn:hover {
+        color: var(--text-primary);
+        background-color: var(--bg-subtle);
+        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    }
 
-        .metric-card:hover {
-            transform: translateY(-2px);
-            border-color: rgba(56, 189, 248, 0.3);
-        }
+    .tab-btn.active {
+        color: var(--text-primary);
+        border-bottom-color: var(--border-active);
+    }
 
-        .metric-card h3 {
-            font-size: 11px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn var(--transition-fast); }
 
-        .metric-card .val {
-            font-size: 26px;
-            font-weight: 700;
-            margin-top: 6px;
-            color: var(--text-main);
-        }
+    /* Empty state layout */
+    .empty-state {
+        text-align: center;
+        padding: 48px 24px;
+    }
 
-        /* Navigation Tabs */
-        .tabs-nav {
-            display: flex;
-            gap: 6px;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 24px;
-            overflow-x: auto;
-            padding-bottom: 2px;
-        }
+    .empty-state-icon {
+        font-size: 36px;
+        margin-bottom: 12px;
+        opacity: 0.8;
+    }
 
-        .tab-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            padding: 12px 18px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
+    .empty-state-title {
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
 
-        .tab-btn:hover { color: var(--text-main); }
-        .tab-btn.active {
-            color: var(--accent-blue);
-            border-bottom-color: var(--accent-blue);
-        }
+    .empty-state-desc {
+        font-size: 12px;
+        color: var(--text-secondary);
+        max-width: 360px;
+        margin: 0 auto 16px auto;
+    }
 
-        /* Tab Content Section */
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+{% endblock %}
 
-        /* Data Tables */
-        .table-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            overflow: hidden;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-        }
+{% block content %}
+<div class="dashboard-layout">
 
-        .table-header {
-            padding: 18px 24px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-
-        .table-header h2 { font-size: 16px; font-weight: 600; }
-        .table-header p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-
-        .create-btn {
-            background: var(--accent-gradient);
-            color: #fff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
-        }
-
-        .create-btn:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-        }
-
-        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
-
-        th {
-            background: rgba(15, 23, 42, 0.8);
-            color: var(--text-muted);
-            padding: 12px 24px;
-            font-weight: 600;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        td {
-            padding: 14px 24px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            color: #e2e8f0;
-        }
-
-        tr:hover td { background: rgba(255, 255, 255, 0.02); }
-
-        /* Badges */
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        .badge-superadmin { background: rgba(192, 132, 252, 0.15); color: var(--accent-purple); border: 1px solid rgba(192, 132, 252, 0.3); }
-        .badge-deptadmin { background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.3); }
-        .badge-member { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.3); }
-        .badge-auditor { background: rgba(52, 211, 153, 0.15); color: var(--accent-green); border: 1px solid rgba(52, 211, 153, 0.3); }
-
-        .badge-public { background: rgba(52, 211, 153, 0.15); color: var(--accent-green); border: 1px solid rgba(52, 211, 153, 0.3); }
-        .badge-department { background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.3); }
-        .badge-confidential { background: rgba(248, 113, 113, 0.15); color: var(--accent-red); border: 1px solid rgba(248, 113, 113, 0.3); }
-        .badge-restricted { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
-
-        .action-btn {
-            background: #0284c7;
-            color: #fff;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.2s ease;
-        }
-
-        .action-btn:hover { opacity: 0.9; }
-
-        /* SIEM Log Box */
-        .siem-container {
-            background: #060910;
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 16px;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 12px;
-            color: #38bdf8;
-            height: 480px;
-            overflow-y: auto;
-        }
-
-        .siem-line { margin-bottom: 8px; line-height: 1.5; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px; }
-        .siem-time { color: #64748b; }
-        .siem-action { color: #34d399; font-weight: bold; }
-        .siem-details { color: #cbd5e1; }
-
-        /* Modal Backdrop & Modal Box */
-        .modal-backdrop {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(8px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .modal-box {
-            background: #131b2e;
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            width: 100%;
-            max-width: 520px;
-            padding: 28px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
-            animation: modalFadeIn 0.25s ease-out;
-        }
-
-        @keyframes modalFadeIn {
-            from { opacity: 0; transform: scale(0.96); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        .modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-
-        .modal-header h3 { font-size: 18px; font-weight: 600; }
-
-        .modal-close {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            font-size: 20px;
-            cursor: pointer;
-        }
-
-        .modal-close:hover { color: #fff; }
-
-        .form-group { margin-bottom: 16px; }
-
-        .form-group label {
-            display: block;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-            text-transform: uppercase;
-        }
-
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%;
-            padding: 10px 14px;
-            background: var(--input-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 14px;
-            font-family: inherit;
-            outline: none;
-        }
-
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-            border-color: var(--accent-blue);
-        }
-
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 24px;
-        }
-    </style>
-</head>
-<body>
-
-    <!-- Top Header -->
-    <header>
-        <div class="brand">
-            <div class="brand-badge">ENTERPRISE GOVERNANCE</div>
-            <div class="tenant-title">
-                <h1 id="org-name-header">Acme Enterprise Platform</h1>
-                <p id="org-slug-header">Tenant: Loading...</p>
+    <!-- Top Dashboard Header -->
+    <header class="dashboard-header">
+        <div class="brand-section">
+            <div class="brand-pill">⚡ Enterprise Admin</div>
+            <div>
+                <h1 id="org-name-header" style="font-size: 16px; font-weight: 600; line-height: 1.2;">Loading Organization...</h1>
+                <p id="org-slug-header" class="text-xs text-secondary">Tenant: --</p>
             </div>
         </div>
 
-        <div class="auth-bar">
-            <a href="/" class="nav-btn">💬 Chat Workspace</a>
-            <button class="nav-btn" onclick="refreshDashboardData()">🔄 Refresh</button>
-            <button class="nav-btn danger" onclick="handleLogout()">🚪 Sign Out</button>
+        <div class="flex items-center gap-2">
+            <button type="button" class="btn btn-outline btn-sm" data-theme-toggle onclick="Theme.toggle()">
+                <span class="theme-toggle-icon">🌙</span>
+            </button>
+            <a href="/" class="btn btn-outline btn-sm">💬 Chat Workspace</a>
+            <button type="button" class="btn btn-outline btn-sm" onclick="refreshDashboardData(true)">🔄 Refresh</button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="handleDashboardLogout()">🚪 Sign Out</button>
         </div>
     </header>
 
-    <!-- Main Content -->
-    <div class="dashboard-container">
+    <!-- Main Content Container -->
+    <main class="dashboard-container">
 
-        <!-- Metrics Overview -->
+        <!-- 1. Executive Metrics Grid -->
         <div class="metrics-grid">
             <div class="metric-card">
-                <h3>Total Members</h3>
-                <div class="val" id="metric-users">0</div>
+                <div class="metric-title">Total Members</div>
+                <div class="metric-value" id="metric-users">0</div>
             </div>
             <div class="metric-card">
-                <h3>Departments</h3>
-                <div class="val" id="metric-depts">0</div>
+                <div class="metric-title">Departments</div>
+                <div class="metric-value" id="metric-depts">0</div>
             </div>
             <div class="metric-card">
-                <h3>Indexed Documents</h3>
-                <div class="val" id="metric-docs">0</div>
+                <div class="metric-title">Indexed Knowledge Docs</div>
+                <div class="metric-value" id="metric-docs">0</div>
             </div>
             <div class="metric-card">
-                <h3>Data Connector Jobs</h3>
-                <div class="val" id="metric-jobs">0</div>
+                <div class="metric-title">Data Connector Jobs</div>
+                <div class="metric-value" id="metric-jobs">0</div>
             </div>
             <div class="metric-card">
-                <h3>Compliance Audits</h3>
-                <div class="val" id="metric-audits">0</div>
+                <div class="metric-title">Compliance Audits</div>
+                <div class="metric-value" id="metric-audits">0</div>
             </div>
         </div>
 
-        <!-- Navigation Tabs -->
-        <div class="tabs-nav">
+        <!-- 2. Governance Tabs Navigation -->
+        <div class="tabs-nav" role="tablist">
             <button class="tab-btn active" onclick="switchTab('tab-users', this)">👥 User Governance</button>
             <button class="tab-btn" onclick="switchTab('tab-depts', this)">🏢 Departments</button>
             <button class="tab-btn" onclick="switchTab('tab-docs', this)">📄 Documents & ACLs</button>
             <button class="tab-btn" onclick="switchTab('tab-personas', this)">🎭 Assistant Personas</button>
             <button class="tab-btn" onclick="switchTab('tab-prompts', this)">📝 Prompt Templates</button>
-            <button class="tab-btn" onclick="switchTab('tab-jobs', this)">⚙️ Data Source Jobs</button>
+            <button class="tab-btn" onclick="switchTab('tab-jobs', this)">⚙️ Connector Jobs</button>
             <button class="tab-btn" onclick="switchTab('tab-siem', this)">🛡️ SIEM Audit Trail</button>
         </div>
 
-        <!-- Tab 1: Users -->
-        <div id="tab-users" class="tab-content active">
-            <div class="table-card">
-                <div class="table-header">
-                    <div>
-                        <h2>Tenant User Accounts & Role Governance</h2>
-                        <p>Provision and manage member clearance across departments</p>
-                    </div>
-                    <button class="create-btn" onclick="openModal('user-modal')">+ Provision User</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>User Name</th>
-                            <th>Email Address</th>
-                            <th>Role</th>
-                            <th>Department</th>
-                            <th>Status</th>
-                            <th>Created At</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-table-body">
-                        <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading users...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <!-- 3. Modular Tab Panels -->
+        {% include "components/tables/users_table.html" %}
+        {% include "components/tables/depts_table.html" %}
+        {% include "components/tables/docs_table.html" %}
+        {% include "components/tables/personas_table.html" %}
+        {% include "components/tables/prompts_table.html" %}
+        {% include "components/tables/jobs_table.html" %}
+        {% include "components/tables/siem_panel.html" %}
 
-        <!-- Tab 2: Departments -->
-        <div id="tab-depts" class="tab-content">
-            <div class="table-card">
-                <div class="table-header">
-                    <div>
-                        <h2>Functional Department Units</h2>
-                        <p>Define functional boundaries for vector isolation</p>
-                    </div>
-                    <button class="create-btn" onclick="openModal('dept-modal')">+ Create Department</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Department Name</th>
-                            <th>Code</th>
-                            <th>Department ID</th>
-                            <th>Created At</th>
-                        </tr>
-                    </thead>
-                    <tbody id="depts-table-body">
-                        <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Loading departments...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    </main>
 
-        <!-- Tab 3: Documents -->
-        <div id="tab-docs" class="tab-content">
-            <div class="table-card">
-                <div class="table-header">
-                    <div>
-                        <h2>Indexed Knowledge Documents & Security ACLs</h2>
-                        <p>Manage documents and verify departmental clearance levels</p>
-                    </div>
-                    <button class="create-btn" onclick="openModal('doc-modal')">+ Upload Document</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Document Name</th>
-                            <th>Access Level</th>
-                            <th>Department</th>
-                            <th>Status</th>
-                            <th>Size</th>
-                            <th>Created At</th>
-                        </tr>
-                    </thead>
-                    <tbody id="docs-table-body">
-                        <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading documents...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <!-- 4. Modular Action Modals -->
+    {% include "components/modals/user_modal.html" %}
+    {% include "components/modals/dept_modal.html" %}
+    {% include "components/modals/doc_modal.html" %}
+    {% include "components/modals/persona_modal.html" %}
+    {% include "components/modals/prompt_modal.html" %}
+    {% include "components/modals/job_modal.html" %}
 
-        <!-- Tab 4: Personas -->
-        <div id="tab-personas" class="tab-content">
-            <div class="table-card">
-                <div class="table-header">
-                    <div>
-                        <h2>Assistant Personas</h2>
-                        <p>Governed AI behavioral system instructions</p>
-                    </div>
-                    <button class="create-btn" onclick="openModal('persona-modal')">+ Create Persona</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Persona Name</th>
-                            <th>Description</th>
-                            <th>Department Scope</th>
-                            <th>Default</th>
-                            <th>System Template Preview</th>
-                        </tr>
-                    </thead>
-                    <tbody id="personas-table-body">
-                        <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading personas...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+</div>
+{% endblock %}
 
-        <!-- Tab 5: Prompt Templates -->
-        <div id="tab-prompts" class="tab-content">
-            <div class="table-card">
-                <div class="table-header">
-                    <div>
-                        <h2>Governed Prompt Templates</h2>
-                        <p>Curated prompts for department-specific workflows</p>
-                    </div>
-                    <button class="create-btn" onclick="openModal('prompt-modal')">+ Create Template</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Template Title</th>
-                            <th>Category</th>
-                            <th>Department Scope</th>
-                            <th>Prompt Template Body</th>
-                        </tr>
-                    </thead>
-                    <tbody id="prompts-table-body">
-                        <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Loading prompt templates...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+{% block scripts %}
+<script>
+    let cachedDepartments = [];
+    let siemPollInterval = null;
 
-        <!-- Tab 6: Connector Jobs -->
-        <div id="tab-jobs" class="tab-content">
-            <div class="table-card">
-                <div class="table-header">
-                    <div>
-                        <h2>Data Source Connector Sync Jobs</h2>
-                        <p>Automated ingestion pipelines from cloud and enterprise storage</p>
-                    </div>
-                    <button class="create-btn" onclick="openModal('job-modal')">+ Create Sync Job</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Job Name</th>
-                            <th>Source Type</th>
-                            <th>Access Clearance</th>
-                            <th>Status</th>
-                            <th>Docs Processed</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="jobs-table-body">
-                        <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading connector jobs...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    // --- Modal Controls ---
+    function openModal(modalId) {
+        const el = document.getElementById(modalId);
+        if (el) el.style.display = "flex";
+    }
 
-        <!-- Tab 7: SIEM Visualizer -->
-        <div id="tab-siem" class="tab-content">
-            <div class="table-card" style="padding: 20px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-                    <h2>Real-Time Compliance SIEM Telemetry Log</h2>
-                    <span style="font-size: 12px; color: #34d399;">● Live Telemetry Stream</span>
-                </div>
-                <div class="siem-container" id="siem-log-box">
-                    <div class="siem-line">[SYSTEM] SIEM Telemetry Log initialized. Polling audit events...</div>
-                </div>
-            </div>
-        </div>
+    function closeModal(modalId) {
+        const el = document.getElementById(modalId);
+        if (el) el.style.display = "none";
+    }
 
-    </div>
+    // --- Tab Switcher ---
+    function switchTab(tabId, btnElement) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        const target = document.getElementById(tabId);
+        if (target) target.classList.add('active');
+        if (btnElement) btnElement.classList.add('active');
 
-    <!-- ==================== MODALS ==================== -->
-
-    <!-- 1. Provision User Modal -->
-    <div id="user-modal" class="modal-backdrop">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3>Provision New Tenant User</h3>
-                <button class="modal-close" onclick="closeModal('user-modal')">&times;</button>
-            </div>
-            <form onsubmit="handleCreateUser(event)">
-                <div class="form-group">
-                    <label>Full Name</label>
-                    <input type="text" id="user-name" placeholder="Bob Jones" required>
-                </div>
-                <div class="form-group">
-                    <label>Work Email</label>
-                    <input type="email" id="user-email" placeholder="bob@company.com" required>
-                </div>
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" id="user-pwd" placeholder="••••••••••••" required>
-                </div>
-                <div class="form-group">
-                    <label>Role</label>
-                    <select id="user-role" required>
-                        <option value="MEMBER">MEMBER (Standard Query Access)</option>
-                        <option value="DEPT_ADMIN">DEPT_ADMIN (Department Curator)</option>
-                        <option value="SUPER_ADMIN">SUPER_ADMIN (Tenant Executive)</option>
-                        <option value="AUDITOR">AUDITOR (Compliance & Audit Only)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Department</label>
-                    <select id="user-dept-select" required></select>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="nav-btn" onclick="closeModal('user-modal')">Cancel</button>
-                    <button type="submit" class="create-btn">Create User</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- 2. Create Department Modal -->
-    <div id="dept-modal" class="modal-backdrop">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3>Create Functional Department</h3>
-                <button class="modal-close" onclick="closeModal('dept-modal')">&times;</button>
-            </div>
-            <form onsubmit="handleCreateDepartment(event)">
-                <div class="form-group">
-                    <label>Department Name</label>
-                    <input type="text" id="dept-name-input" placeholder="Human Resources" required>
-                </div>
-                <div class="form-group">
-                    <label>Department Code (Unique)</label>
-                    <input type="text" id="dept-code-input" placeholder="HR" required>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="nav-btn" onclick="closeModal('dept-modal')">Cancel</button>
-                    <button type="submit" class="create-btn">Create Department</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- 3. Upload Enterprise Document Modal -->
-    <div id="doc-modal" class="modal-backdrop">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3>Upload Enterprise Knowledge Document</h3>
-                <button class="modal-close" onclick="closeModal('doc-modal')">&times;</button>
-            </div>
-            <form onsubmit="handleUploadDocument(event)">
-                <div class="form-group">
-                    <label>Select Document (PDF, DOCX, TXT)</label>
-                    <input type="file" id="doc-file-input" required>
-                </div>
-                <div class="form-group">
-                    <label>Security Access Level (ACL)</label>
-                    <select id="doc-acl-select" required>
-                        <option value="DEPARTMENT">DEPARTMENT (Visible to Department Members)</option>
-                        <option value="PUBLIC">PUBLIC (Visible Tenant-Wide)</option>
-                        <option value="CONFIDENTIAL">CONFIDENTIAL (DeptAdmins & SuperAdmins Only)</option>
-                        <option value="RESTRICTED">RESTRICTED (Private to Uploader)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Target Department</label>
-                    <select id="doc-dept-select"></select>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="nav-btn" onclick="closeModal('doc-modal')">Cancel</button>
-                    <button type="submit" class="create-btn" id="upload-doc-btn">Upload & Ingest</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- 4. Create Persona Modal -->
-    <div id="persona-modal" class="modal-backdrop">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3>Create Assistant Persona</h3>
-                <button class="modal-close" onclick="closeModal('persona-modal')">&times;</button>
-            </div>
-            <form onsubmit="handleCreatePersona(event)">
-                <div class="form-group">
-                    <label>Persona Name</label>
-                    <input type="text" id="persona-name" placeholder="Legal Compliance Advisor" required>
-                </div>
-                <div class="form-group">
-                    <label>Description</label>
-                    <input type="text" id="persona-desc" placeholder="Specialized in NDA and Contract review">
-                </div>
-                <div class="form-group">
-                    <label>System Instruction Template</label>
-                    <textarea id="persona-template" rows="4" placeholder="You are a legal advisor assistant. Provide concise, grounded answers using provided NDA clauses." required></textarea>
-                </div>
-                <div class="form-group">
-                    <label><input type="checkbox" id="persona-default"> Set as Default Persona for Department</label>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="nav-btn" onclick="closeModal('persona-modal')">Cancel</button>
-                    <button type="submit" class="create-btn">Save Persona</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- 5. Create Prompt Template Modal -->
-    <div id="prompt-modal" class="modal-backdrop">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3>Create Prompt Template</h3>
-                <button class="modal-close" onclick="closeModal('prompt-modal')">&times;</button>
-            </div>
-            <form onsubmit="handleCreatePrompt(event)">
-                <div class="form-group">
-                    <label>Template Title</label>
-                    <input type="text" id="prompt-title" placeholder="Summarize Financial Q3 Report" required>
-                </div>
-                <div class="form-group">
-                    <label>Category</label>
-                    <input type="text" id="prompt-category" value="QNA" required>
-                </div>
-                <div class="form-group">
-                    <label>User Prompt Template</label>
-                    <textarea id="prompt-body" rows="3" placeholder="Please analyze the key revenue and EBITDA numbers from the document." required></textarea>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="nav-btn" onclick="closeModal('prompt-modal')">Cancel</button>
-                    <button type="submit" class="create-btn">Save Template</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- 6. Create Job Modal -->
-    <div id="job-modal" class="modal-backdrop">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3>Create Data Source Sync Job</h3>
-                <button class="modal-close" onclick="closeModal('job-modal')">&times;</button>
-            </div>
-            <form onsubmit="handleCreateJob(event)">
-                <div class="form-group">
-                    <label>Job Name</label>
-                    <input type="text" id="job-name" placeholder="Engineering S3 Docs Sync" required>
-                </div>
-                <div class="form-group">
-                    <label>Source Type</label>
-                    <select id="job-source-type">
-                        <option value="S3_BUCKET">Amazon S3 Bucket</option>
-                        <option value="GOOGLE_DRIVE">Google Workspace Drive</option>
-                        <option value="POSTGRES_DB">PostgreSQL Knowledge Source</option>
-                        <option value="CONFLUENCE">Atlassian Confluence</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Access Level</label>
-                    <select id="job-acl">
-                        <option value="DEPARTMENT">DEPARTMENT</option>
-                        <option value="PUBLIC">PUBLIC</option>
-                        <option value="CONFIDENTIAL">CONFIDENTIAL</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Connection Configuration (JSON)</label>
-                    <textarea id="job-config" rows="3" placeholder='{"bucket_name": "acme-knowledge", "region": "us-east-1"}' required></textarea>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="nav-btn" onclick="closeModal('job-modal')">Cancel</button>
-                    <button type="submit" class="create-btn">Create Job</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- JavaScript Interactions -->
-    <script>
-        let adminToken = localStorage.getItem("enterprise_token") || localStorage.getItem("enterprise_admin_token") || "";
-        let cachedDepartments = [];
-
-        function checkAuth() {
-            if (!adminToken) {
-                window.location.href = "/enterprise/login";
+        // Start/Stop SIEM Live Polling
+        if (tabId === 'tab-siem') {
+            fetchSIEMLogs();
+            if (!siemPollInterval) {
+                siemPollInterval = setInterval(fetchSIEMLogs, 8000);
             }
+        } else if (siemPollInterval) {
+            clearInterval(siemPollInterval);
+            siemPollInterval = null;
+        }
+    }
+
+    // --- Logout Handler ---
+    function handleDashboardLogout() {
+        Auth.logout();
+    }
+
+    // --- File Dropzone Helper ---
+    function handleModalFileSelect(input) {
+        if (input.files && input.files[0]) {
+            document.getElementById('modal-dropzone-filename').textContent = input.files[0].name;
+        }
+    }
+
+    function deriveDeptCode() {
+        const name = document.getElementById('dept-name-input').value;
+        const code = name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+        document.getElementById('dept-code-input').value = code.substring(0, 10);
+    }
+
+    // --- Empty State Render Helper ---
+    function renderEmptyState(icon, title, description, actionBtnHtml = '') {
+        return `
+            <tr>
+                <td colspan="100%">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">${icon}</div>
+                        <div class="empty-state-title">${title}</div>
+                        <div class="empty-state-desc">${description}</div>
+                        ${actionBtnHtml}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
+    // --- Main Dashboard Data Hydration ---
+    async function refreshDashboardData(showToast = false) {
+        if (!Auth.isAuthenticated()) {
+            window.location.href = '/enterprise/login?redirect=/enterprise/dashboard';
+            return;
         }
 
-        function handleLogout() {
-            localStorage.removeItem("enterprise_token");
-            localStorage.removeItem("enterprise_admin_token");
-            localStorage.removeItem("enterprise_user");
-            window.location.href = "/enterprise/login";
-        }
-
-        function openModal(id) { document.getElementById(id).style.display = "flex"; }
-        function closeModal(id) { document.getElementById(id).style.display = "none"; }
-
-        function switchTab(tabId, btn) {
-            document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
-            document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
-            document.getElementById(tabId).classList.add("active");
-            btn.classList.add("active");
-        }
-
-        async function fetchAPI(endpoint, options = {}) {
-            if (!options.headers) options.headers = {};
-            if (adminToken) options.headers["Authorization"] = "Bearer " + adminToken;
-            const res = await fetch(endpoint, options);
-            if (res.status === 401) {
-                alert("Session expired. Please sign in again.");
-                window.location.href = "/enterprise/login";
-                return null;
+        try {
+            // 1. Fetch Metrics
+            const metrics = await fetchAPI('/enterprise/metrics');
+            if (metrics) {
+                document.getElementById('org-name-header').textContent = metrics.org_name;
+                document.getElementById('org-slug-header').textContent = `Tenant Slug: ${metrics.org_slug}`;
+                document.getElementById('metric-users').textContent = metrics.total_users;
+                document.getElementById('metric-depts').textContent = metrics.total_departments;
+                document.getElementById('metric-docs').textContent = metrics.total_documents;
+                document.getElementById('metric-jobs').textContent = metrics.total_jobs;
+                document.getElementById('metric-audits').textContent = metrics.total_audits;
             }
-            if (res.status === 403) {
-                console.warn(`Access forbidden for endpoint: ${endpoint}`);
-                return null;
-            }
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.detail || `HTTP ${res.status}`);
-            }
-            return await res.json();
-        }
 
-        async function refreshDashboardData() {
-            try {
-                // 1. Metrics
-                const metrics = await fetchAPI("/enterprise/metrics");
-                if (metrics) {
-                    document.getElementById("org-name-header").innerText = metrics.org_name;
-                    document.getElementById("org-slug-header").innerText = "Tenant: " + metrics.org_slug;
-                    document.getElementById("metric-users").innerText = metrics.total_users;
-                    document.getElementById("metric-depts").innerText = metrics.total_departments;
-                    document.getElementById("metric-docs").innerText = metrics.total_documents;
-                    document.getElementById("metric-jobs").innerText = metrics.total_jobs;
-                    document.getElementById("metric-audits").innerText = metrics.total_audits;
-                }
-
-                // 2. Departments
-                const depts = await fetchAPI("/enterprise/departments");
-                if (depts) {
-                    cachedDepartments = depts;
-                    let deptsHtml = "";
-                    let selectOptions = "<option value=''>Select Department</option>";
+            // 2. Fetch Departments
+            const depts = await fetchAPI('/enterprise/departments');
+            if (depts) {
+                cachedDepartments = depts;
+                const deptsTable = document.getElementById('depts-table-body');
+                if (depts.length === 0) {
+                    deptsTable.innerHTML = renderEmptyState('🏢', 'No departments created yet', 'Establish functional units to organize access permissions and vector storage.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'dept-modal\')">+ Create Department</button>');
+                } else {
+                    let rowsHtml = '';
+                    let deptOptions = '<option value="">Tenant-Wide / General</option>';
                     depts.forEach(d => {
-                        deptsHtml += `
+                        rowsHtml += `
                             <tr>
-                                <td><strong>${d.name}</strong></td>
-                                <td><span class="badge badge-department">${d.code}</span></td>
-                                <td><code>${d.id}</code></td>
-                                <td>${new Date(d.created_at).toLocaleString()}</td>
+                                <td><strong>${escapeHTML(d.name)}</strong></td>
+                                <td><span class="badge badge-acl-department">${escapeHTML(d.code)}</span></td>
+                                <td><code>${escapeHTML(d.id)}</code></td>
+                                <td>${formatDate(d.created_at)}</td>
                             </tr>
                         `;
-                        selectOptions += `<option value="${d.id}">${d.name} (${d.code})</option>`;
+                        deptOptions += `<option value="${escapeHTML(d.id)}">${escapeHTML(d.name)} (${escapeHTML(d.code)})</option>`;
                     });
-                    document.getElementById("depts-table-body").innerHTML = deptsHtml || "<tr><td colspan='4'>No departments found</td></tr>";
-                    document.getElementById("user-dept-select").innerHTML = selectOptions;
-                    document.getElementById("doc-dept-select").innerHTML = selectOptions;
+                    deptsTable.innerHTML = rowsHtml;
+                    document.getElementById('user-dept-select').innerHTML = deptOptions;
+                    document.getElementById('doc-dept-select').innerHTML = deptOptions;
+                    document.getElementById('job-dept-select').innerHTML = deptOptions;
                 }
+            }
 
-                // 3. Users
-                const users = await fetchAPI("/enterprise/users");
+            // 3. Fetch Users
+            if (Auth.hasAdminAccess()) {
+                const users = await fetchAPI('/enterprise/users');
                 if (users) {
-                    let usersHtml = "";
-                    users.forEach(u => {
-                        let roleBadge = "badge-member";
-                        if (u.role === "SUPER_ADMIN") roleBadge = "badge-superadmin";
-                        if (u.role === "DEPT_ADMIN") roleBadge = "badge-deptadmin";
-                        if (u.role === "AUDITOR") roleBadge = "badge-auditor";
-                        
-                        const deptName = cachedDepartments.find(d => d.id === u.department_id)?.name || "General";
-                        usersHtml += `
-                            <tr>
-                                <td><strong>${u.full_name}</strong></td>
-                                <td>${u.email}</td>
-                                <td><span class="badge ${roleBadge}">${u.role}</span></td>
-                                <td>${deptName}</td>
-                                <td><span style="color: #34d399;">Active</span></td>
-                                <td>${new Date(u.created_at).toLocaleString()}</td>
-                            </tr>
-                        `;
-                    });
-                    document.getElementById("users-table-body").innerHTML = usersHtml || "<tr><td colspan='6'>No users found</td></tr>";
-                }
+                    const usersTable = document.getElementById('users-table-body');
+                    if (users.length === 0) {
+                        usersTable.innerHTML = renderEmptyState('👥', 'No users found', 'Provision employee accounts and assign department clearances.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'user-modal\')">+ Provision User</button>');
+                    } else {
+                        let rowsHtml = '';
+                        users.forEach(u => {
+                            let roleBadgeClass = 'badge-role-member';
+                            if (u.role === 'SUPER_ADMIN') roleBadgeClass = 'badge-role-superadmin';
+                            if (u.role === 'DEPT_ADMIN') roleBadgeClass = 'badge-role-deptadmin';
+                            if (u.role === 'AUDITOR') roleBadgeClass = 'badge-role-auditor';
 
-                // 4. Documents
-                const docs = await fetchAPI("/enterprise/documents");
-                if (docs) {
-                    let docsHtml = "";
-                    docs.forEach(doc => {
-                        let aclBadge = "badge-department";
-                        if (doc.access_level === "PUBLIC") aclBadge = "badge-public";
-                        if (doc.access_level === "CONFIDENTIAL") aclBadge = "badge-confidential";
-                        if (doc.access_level === "RESTRICTED") aclBadge = "badge-restricted";
-
-                        const deptName = cachedDepartments.find(d => d.id === doc.department_id)?.name || "General";
-                        docsHtml += `
-                            <tr>
-                                <td><strong>${doc.filename}</strong></td>
-                                <td><span class="badge ${aclBadge}">${doc.access_level}</span></td>
-                                <td>${deptName}</td>
-                                <td><span style="color: #34d399;">${doc.status}</span></td>
-                                <td>${Math.round(doc.size_bytes / 1024)} KB</td>
-                                <td>${new Date(doc.created_at).toLocaleString()}</td>
-                            </tr>
-                        `;
-                    });
-                    document.getElementById("docs-table-body").innerHTML = docsHtml || "<tr><td colspan='6'>No documents found</td></tr>";
-                }
-
-                // 5. Personas
-                const personas = await fetchAPI("/enterprise/personas");
-                if (personas) {
-                    let personasHtml = "";
-                    personas.forEach(p => {
-                        personasHtml += `
-                            <tr>
-                                <td><strong>${p.name}</strong></td>
-                                <td>${p.description || '-'}</td>
-                                <td>${p.department_id || 'Tenant-Wide'}</td>
-                                <td>${p.is_default ? '⭐ Yes' : 'No'}</td>
-                                <td><code>${(p.system_template || '').substring(0, 50)}...</code></td>
-                            </tr>
-                        `;
-                    });
-                    document.getElementById("personas-table-body").innerHTML = personasHtml || "<tr><td colspan='5'>No personas found</td></tr>";
-                }
-
-                // 6. Prompt Templates
-                const prompts = await fetchAPI("/enterprise/prompt-templates");
-                if (prompts) {
-                    let promptsHtml = "";
-                    prompts.forEach(pt => {
-                        promptsHtml += `
-                            <tr>
-                                <td><strong>${pt.title}</strong></td>
-                                <td><span class="badge badge-department">${pt.category}</span></td>
-                                <td>${pt.department_id || 'Tenant-Wide'}</td>
-                                <td>${pt.user_prompt_template.substring(0, 60)}...</td>
-                            </tr>
-                        `;
-                    });
-                    document.getElementById("prompts-table-body").innerHTML = promptsHtml || "<tr><td colspan='4'>No templates found</td></tr>";
-                }
-
-                // 7. Jobs
-                const jobs = await fetchAPI("/enterprise/jobs");
-                if (jobs) {
-                    let jobsHtml = "";
-                    jobs.forEach(j => {
-                        jobsHtml += `
-                            <tr>
-                                <td><strong>${j.name}</strong></td>
-                                <td><code>${j.source_type}</code></td>
-                                <td><span class="badge badge-department">${j.access_level}</span></td>
-                                <td><span style="color: #38bdf8;">${j.status}</span></td>
-                                <td>${j.documents_processed_count}</td>
-                                <td><button class="action-btn" onclick="triggerJob('${j.id}')">▶ Trigger</button></td>
-                            </tr>
-                        `;
-                    });
-                    document.getElementById("jobs-table-body").innerHTML = jobsHtml || "<tr><td colspan='6'>No jobs found</td></tr>";
-                }
-
-                // 8. SIEM Logs (Load only if permitted)
-                const currentUser = JSON.parse(localStorage.getItem("enterprise_user") || "{}");
-                if (currentUser.role === "SUPER_ADMIN" || currentUser.role === "AUDITOR") {
-                    const logs = await fetchAPI("/enterprise/audit/logs");
-                    if (logs) {
-                        let siemHtml = "";
-                        logs.forEach(l => {
-                            siemHtml += `
-                                <div class="siem-line">
-                                    <span class="siem-time">[${new Date(l.created_at).toISOString()}]</span>
-                                    <span class="siem-action">${l.action}</span> |
-                                    <span>User: ${l.user_id || 'system'}</span> |
-                                    <span class="siem-details">${JSON.stringify(l.details)}</span>
-                                </div>
+                            const deptName = cachedDepartments.find(d => d.id === u.department_id)?.name || 'General';
+                            rowsHtml += `
+                                <tr>
+                                    <td><strong>${escapeHTML(u.full_name || 'Member')}</strong></td>
+                                    <td>${escapeHTML(u.email)}</td>
+                                    <td><span class="badge ${roleBadgeClass}">${escapeHTML(u.role)}</span></td>
+                                    <td>${escapeHTML(deptName)}</td>
+                                    <td><span class="badge badge-acl-public">Active</span></td>
+                                    <td>${formatDate(u.created_at)}</td>
+                                </tr>
                             `;
                         });
-                        document.getElementById("siem-log-box").innerHTML = siemHtml || "<div class='siem-line'>No audit events recorded.</div>";
+                        usersTable.innerHTML = rowsHtml;
                     }
-                } else {
-                    document.getElementById("siem-log-box").innerHTML = "<div class='siem-line' style='color: #94a3b8;'>SIEM Audit Trail is restricted to SuperAdmins and Auditors.</div>";
                 }
+            }
 
+            // 4. Fetch Documents
+            const docs = await fetchAPI('/enterprise/documents');
+            if (docs) {
+                const docsTable = document.getElementById('docs-table-body');
+                if (docs.length === 0) {
+                    docsTable.innerHTML = renderEmptyState('📄', 'No documents indexed', 'Upload enterprise knowledge documents to ground assistant queries with citations.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'doc-modal\')">+ Upload Document</button>');
+                } else {
+                    let rowsHtml = '';
+                    docs.forEach(doc => {
+                        let aclBadgeClass = 'badge-acl-department';
+                        if (doc.access_level === 'PUBLIC') aclBadgeClass = 'badge-acl-public';
+                        if (doc.access_level === 'CONFIDENTIAL') aclBadgeClass = 'badge-acl-confidential';
+                        if (doc.access_level === 'RESTRICTED') aclBadgeClass = 'badge-acl-restricted';
+
+                        const deptName = cachedDepartments.find(d => d.id === doc.department_id)?.name || 'General';
+                        rowsHtml += `
+                            <tr>
+                                <td><strong>${escapeHTML(doc.filename)}</strong></td>
+                                <td><span class="badge ${aclBadgeClass}">${escapeHTML(doc.access_level)}</span></td>
+                                <td>${escapeHTML(deptName)}</td>
+                                <td><span class="badge badge-acl-public">${escapeHTML(doc.status)}</span></td>
+                                <td>${formatBytes(doc.size_bytes)}</td>
+                                <td>${formatDate(doc.created_at)}</td>
+                                <td>
+                                    <button type="button" class="btn btn-danger btn-sm" onclick="handleDeleteDocument('${doc.id}', '${escapeHTML(doc.filename)}')" title="Purge document & vectors">
+                                        🗑️ Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    docsTable.innerHTML = rowsHtml;
+                }
+            }
+
+            // 5. Fetch Personas
+            const personas = await fetchAPI('/enterprise/governance/personas');
+            if (personas) {
+                const personasTable = document.getElementById('personas-table-body');
+                if (personas.length === 0) {
+                    personasTable.innerHTML = renderEmptyState('🎭', 'No assistant personas configured', 'Create custom behavioral system instructions for specialized assistant domains.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'persona-modal\')">+ Create Persona</button>');
+                } else {
+                    let rowsHtml = '';
+                    personas.forEach(p => {
+                        rowsHtml += `
+                            <tr>
+                                <td><strong>${escapeHTML(p.name)}</strong></td>
+                                <td>${escapeHTML(p.description || '-')}</td>
+                                <td>${p.department_id ? escapeHTML(p.department_id) : '<span class="badge badge-default">Tenant-Wide</span>'}</td>
+                                <td><code style="font-size: 11px;">${escapeHTML((p.system_template || '').substring(0, 60))}...</code></td>
+                            </tr>
+                        `;
+                    });
+                    personasTable.innerHTML = rowsHtml;
+                }
+            }
+
+            // 6. Fetch Prompt Templates
+            const prompts = await fetchAPI('/enterprise/governance/prompts');
+            if (prompts) {
+                const promptsTable = document.getElementById('prompts-table-body');
+                if (prompts.length === 0) {
+                    promptsTable.innerHTML = renderEmptyState('📝', 'No prompt templates found', 'Curate reusable prompt workflows for enterprise team productivity.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'prompt-modal\')">+ Create Template</button>');
+                } else {
+                    let rowsHtml = '';
+                    prompts.forEach(pt => {
+                        rowsHtml += `
+                            <tr>
+                                <td><strong>${escapeHTML(pt.title)}</strong></td>
+                                <td><span class="badge badge-acl-department">${escapeHTML(pt.category)}</span></td>
+                                <td>${pt.department_id ? escapeHTML(pt.department_id) : '<span class="badge badge-default">Tenant-Wide</span>'}</td>
+                                <td><span class="text-secondary">${escapeHTML((pt.user_prompt_template || '').substring(0, 75))}...</span></td>
+                            </tr>
+                        `;
+                    });
+                    promptsTable.innerHTML = rowsHtml;
+                }
+            }
+
+            // 7. Fetch Connector Jobs
+            const jobs = await fetchAPI('/enterprise/jobs');
+            if (jobs) {
+                const jobsTable = document.getElementById('jobs-table-body');
+                if (jobs.length === 0) {
+                    jobsTable.innerHTML = renderEmptyState('⚙️', 'No connector sync jobs configured', 'Set up automated background ingestion pipelines from S3 buckets, Drive folders, or databases.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'job-modal\')">+ Create Sync Job</button>');
+                } else {
+                    let rowsHtml = '';
+                    jobs.forEach(j => {
+                        rowsHtml += `
+                            <tr>
+                                <td><strong>${escapeHTML(j.name)}</strong></td>
+                                <td><code>${escapeHTML(j.source_type)}</code></td>
+                                <td><span class="badge badge-acl-department">${escapeHTML(j.access_level)}</span></td>
+                                <td><span class="badge badge-acl-public">${escapeHTML(j.status)}</span></td>
+                                <td><strong>${j.documents_processed_count}</strong> files</td>
+                                <td>
+                                    <button type="button" class="btn btn-outline btn-sm" onclick="handleTriggerJob('${j.id}', '${escapeHTML(j.name)}')">
+                                        ▶ Trigger
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    jobsTable.innerHTML = rowsHtml;
+                }
+            }
+
+            if (showToast) {
+                Toast.success('Dashboard Synchronized', 'All governance telemetry and table data refreshed.');
+            }
+
+        } catch (err) {
+            console.error('[Dashboard Error]', err);
+            Toast.error('Dashboard Error', err.message || 'Failed to refresh telemetry.');
+        }
+    }
+
+    // --- SIEM Log Fetcher ---
+    async function fetchSIEMLogs(manual = false) {
+        const user = Auth.getUser();
+        if (user && (user.role === 'SUPER_ADMIN' || user.role === 'AUDITOR')) {
+            try {
+                const logs = await fetchAPI('/enterprise/governance/audit-logs');
+                const logBox = document.getElementById('siem-log-box');
+                if (!logs || logs.length === 0) {
+                    logBox.innerHTML = '<div style="color: #64748B;">[SYSTEM] No compliance audit events recorded yet.</div>';
+                } else {
+                    let html = '';
+                    logs.forEach(l => {
+                        html += `
+                            <div style="margin-bottom: 8px; line-height: 1.5; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+                                <span style="color: #64748B;">[${escapeHTML(l.created_at)}]</span>
+                                <span style="color: #34D399; font-weight: 600;">${escapeHTML(l.action)}</span> |
+                                <span style="color: #E2E8F0;">User: ${escapeHTML(l.user_id || 'System')}</span> |
+                                <span style="color: #94A3B8;">${escapeHTML(JSON.stringify(l.details || {}))}</span>
+                            </div>
+                        `;
+                    });
+                    logBox.innerHTML = html;
+                    if (manual) Toast.success('SIEM Updated', 'Telemetry log stream refreshed.');
+                }
             } catch (err) {
-                console.error("Dashboard error:", err);
+                console.warn('SIEM Fetch error', err);
             }
+        } else {
+            document.getElementById('siem-log-box').innerHTML = '<div style="color: #94A3B8;">SIEM Compliance telemetry is restricted to SuperAdmins and Compliance Auditors.</div>';
         }
+    }
 
-        // --- CRUD Handlers ---
+    // --- CRUD Form Submission Handlers ---
+    async function handleCreateUser(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-user');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Provisioning...';
 
-        async function handleCreateUser(e) {
-            e.preventDefault();
-            try {
-                await fetchAPI("/enterprise/users", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        full_name: document.getElementById("user-name").value.trim(),
-                        email: document.getElementById("user-email").value.trim(),
-                        password: document.getElementById("user-pwd").value,
-                        role: document.getElementById("user-role").value,
-                        department_id: document.getElementById("user-dept-select").value || null
-                    })
-                });
-                closeModal("user-modal");
-                alert("User provisioned successfully!");
-                refreshDashboardData();
-            } catch (err) { alert(err.message); }
-        }
-
-        async function handleCreateDepartment(e) {
-            e.preventDefault();
-            try {
-                await fetchAPI("/enterprise/departments", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        name: document.getElementById("dept-name-input").value.trim(),
-                        code: document.getElementById("dept-code-input").value.trim()
-                    })
-                });
-                closeModal("dept-modal");
-                alert("Department created successfully!");
-                refreshDashboardData();
-            } catch (err) { alert(err.message); }
-        }
-
-        async function handleUploadDocument(e) {
-            e.preventDefault();
-            const fileInput = document.getElementById("doc-file-input");
-            if (fileInput.files.length === 0) return;
-
-            const btn = document.getElementById("upload-doc-btn");
-            btn.disabled = true;
-            btn.innerText = "Ingesting...";
-
-            const formData = new FormData();
-            formData.append("file", fileInput.files[0]);
-            formData.append("access_level", document.getElementById("doc-acl-select").value);
-            const deptId = document.getElementById("doc-dept-select").value;
-            if (deptId) formData.append("target_department_id", deptId);
-
-            try {
-                const res = await fetch("/enterprise/documents/upload", {
-                    method: "POST",
-                    headers: { "Authorization": "Bearer " + adminToken },
-                    body: formData
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || "Upload failed");
-                closeModal("doc-modal");
-                alert("Document queued for ingestion successfully!");
-                refreshDashboardData();
-            } catch (err) { alert(err.message); }
-            finally {
-                btn.disabled = false;
-                btn.innerText = "Upload & Ingest";
-            }
-        }
-
-        async function handleCreatePersona(e) {
-            e.preventDefault();
-            try {
-                await fetchAPI("/enterprise/personas", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        name: document.getElementById("persona-name").value.trim(),
-                        description: document.getElementById("persona-desc").value.trim(),
-                        system_instruction_template: document.getElementById("persona-template").value.trim(),
-                        is_default: document.getElementById("persona-default").checked
-                    })
-                });
-                closeModal("persona-modal");
-                alert("Persona created!");
-                refreshDashboardData();
-            } catch (err) { alert(err.message); }
-        }
-
-        async function handleCreatePrompt(e) {
-            e.preventDefault();
-            try {
-                await fetchAPI("/enterprise/prompt-templates", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        title: document.getElementById("prompt-title").value.trim(),
-                        category: document.getElementById("prompt-category").value.trim(),
-                        user_prompt_template: document.getElementById("prompt-body").value.trim()
-                    })
-                });
-                closeModal("prompt-modal");
-                alert("Prompt template created!");
-                refreshDashboardData();
-            } catch (err) { alert(err.message); }
-        }
-
-        async function handleCreateJob(e) {
-            e.preventDefault();
-            try {
-                const configStr = document.getElementById("job-config").value.trim();
-                await fetchAPI("/enterprise/jobs/create", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        name: document.getElementById("job-name").value.trim(),
-                        source_type: document.getElementById("job-source-type").value,
-                        access_level: document.getElementById("job-acl").value,
-                        connection_config: JSON.parse(configStr)
-                    })
-                });
-                closeModal("job-modal");
-                alert("Connector Job created!");
-                refreshDashboardData();
-            } catch (err) { alert("Error creating job: " + err.message); }
-        }
-
-        async function triggerJob(jobId) {
-            try {
-                const res = await fetchAPI(`/enterprise/jobs/${jobId}/trigger`, { method: "POST" });
-                alert(`Job Triggered! Task ID: ${res.task_id}`);
-                refreshDashboardData();
-            } catch (err) { alert("Trigger failed: " + err.message); }
-        }
-
-        window.onload = () => {
-            checkAuth();
+        try {
+            await fetchAPI('/enterprise/users', {
+                method: 'POST',
+                body: {
+                    full_name: document.getElementById('user-name').value.trim(),
+                    email: document.getElementById('user-email').value.trim(),
+                    password: document.getElementById('user-pwd').value,
+                    role: document.getElementById('user-role').value,
+                    department_id: document.getElementById('user-dept-select').value || null
+                }
+            });
+            closeModal('user-modal');
+            document.getElementById('create-user-form').reset();
+            Toast.success('User Provisioned', 'New member account created successfully.');
             refreshDashboardData();
-        };
-    </script>
-</body>
-</html>
+        } catch (err) {
+            Toast.error('Provisioning Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Provision User';
+        }
+    }
+
+    async function handleCreateDepartment(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-dept');
+        btn.disabled = true;
+
+        try {
+            await fetchAPI('/enterprise/departments', {
+                method: 'POST',
+                body: {
+                    name: document.getElementById('dept-name-input').value.trim(),
+                    code: document.getElementById('dept-code-input').value.trim()
+                }
+            });
+            closeModal('dept-modal');
+            document.getElementById('create-dept-form').reset();
+            Toast.success('Department Created', 'Functional isolation unit registered.');
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Department Creation Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Create Department';
+        }
+    }
+
+    async function handleUploadDocument(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById('doc-file-input');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            Toast.warning('File Required', 'Please select a file to ingest.');
+            return;
+        }
+
+        const btn = document.getElementById('upload-doc-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Ingesting...';
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('access_level', document.getElementById('doc-acl-select').value);
+        const deptId = document.getElementById('doc-dept-select').value;
+        if (deptId) formData.append('target_department_id', deptId);
+
+        try {
+            await fetchAPI('/enterprise/documents/upload', {
+                method: 'POST',
+                body: formData
+            });
+            closeModal('doc-modal');
+            document.getElementById('upload-doc-form').reset();
+            document.getElementById('modal-dropzone-filename').textContent = 'Click or drag & drop a file here';
+            Toast.success('Document Ingested', 'Document queued for background parsing and vector indexing.');
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Ingestion Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Upload & Ingest';
+        }
+    }
+
+    async function handleDeleteDocument(docId, filename) {
+        const confirmed = await Modal.confirm(
+            'Purge Document & Vectors?',
+            `Are you sure you want to permanently delete "${filename}" and all its vector embeddings?`,
+            'Yes, Purge Document',
+            'warning'
+        );
+        if (!confirmed) return;
+
+        try {
+            await fetchAPI(`/documents/${docId}`, { method: 'DELETE' });
+            Toast.success('Document Purged', `"${filename}" removed successfully.`);
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Delete Failed', err.message);
+        }
+    }
+
+    async function handleCreatePersona(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-persona');
+        btn.disabled = true;
+
+        try {
+            await fetchAPI('/enterprise/governance/personas', {
+                method: 'POST',
+                body: {
+                    name: document.getElementById('persona-name').value.trim(),
+                    description: document.getElementById('persona-desc').value.trim(),
+                    system_instruction_template: document.getElementById('persona-template').value.trim()
+                }
+            });
+            closeModal('persona-modal');
+            document.getElementById('create-persona-form').reset();
+            Toast.success('Persona Saved', 'Governed assistant persona created.');
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Persona Creation Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save Persona';
+        }
+    }
+
+    async function handleCreatePrompt(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-prompt');
+        btn.disabled = true;
+
+        try {
+            await fetchAPI('/enterprise/governance/prompts', {
+                method: 'POST',
+                body: {
+                    title: document.getElementById('prompt-title').value.trim(),
+                    category: document.getElementById('prompt-category').value,
+                    user_prompt_template: document.getElementById('prompt-body').value.trim()
+                }
+            });
+            closeModal('prompt-modal');
+            document.getElementById('create-prompt-form').reset();
+            Toast.success('Template Saved', 'Governed prompt template saved.');
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Prompt Creation Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save Template';
+        }
+    }
+
+    async function handleCreateJob(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-job');
+        btn.disabled = true;
+
+        let parsedConfig = {};
+        try {
+            parsedConfig = JSON.parse(document.getElementById('job-config').value.trim());
+        } catch (err) {
+            Toast.error('Invalid JSON', 'Connection configuration must be a valid JSON object.');
+            btn.disabled = false;
+            return;
+        }
+
+        try {
+            await fetchAPI('/enterprise/jobs/create', {
+                method: 'POST',
+                body: {
+                    name: document.getElementById('job-name').value.trim(),
+                    source_type: document.getElementById('job-source-type').value,
+                    access_level: document.getElementById('job-acl').value,
+                    target_department_id: document.getElementById('job-dept-select').value || null,
+                    connection_config: parsedConfig
+                }
+            });
+            closeModal('job-modal');
+            document.getElementById('create-job-form').reset();
+            Toast.success('Job Registered', 'Data source connector job created.');
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Job Creation Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Create Job';
+        }
+    }
+
+    async function handleTriggerJob(jobId, jobName) {
+        try {
+            const res = await fetchAPI(`/enterprise/jobs/${jobId}/trigger`, { method: 'POST' });
+            Toast.success('Job Triggered', `"${jobName}" ingestion task queued (Task ID: ${res.task_id}).`);
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Trigger Failed', err.message);
+        }
+    }
+
+    // Initialize on DOM Ready
+    window.addEventListener('DOMContentLoaded', () => {
+        refreshDashboardData();
+    });
+</script>
+{% endblock %}

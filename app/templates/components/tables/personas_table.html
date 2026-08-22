@@ -1,0 +1,34 @@
+<!-- app/templates/components/tables/personas_table.html -->
+<div id="tab-personas" class="tab-content">
+    <div class="table-container">
+        <div class="flex items-center justify-between" style="padding: 20px 24px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 12px;">
+            <div>
+                <h2 style="font-size: 16px; font-weight: 600;">Governed Assistant Personas</h2>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Domain-specific AI behavioral guardrails and system prompt instructions</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="openModal('persona-modal')">
+                <span>+ Create Persona</span>
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Persona Name</th>
+                        <th>Description</th>
+                        <th>Department Scope</th>
+                        <th>System Template Preview</th>
+                    </tr>
+                </thead>
+                <tbody id="personas-table-body">
+                    <tr>
+                        <td colspan="4" class="text-center text-muted" style="padding: 36px 20px;">
+                            <div class="spinner" style="margin-bottom: 8px;"></div>
+                            <div>Loading assistant personas...</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

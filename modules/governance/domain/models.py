@@ -85,15 +85,24 @@ class IngestionJob(Base):
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+# class ChatSession(Base):
+#     __tablename__ = "chat_sessions"
+#     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+#     org_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+#     department_id = Column(String(36), nullable=True)
+#     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+#     title = Column(String(255), default="New Chat")
+#     created_at = Column(DateTime, default=datetime.utcnow)
+#     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
+
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     org_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    department_id = Column(String(36), nullable=True)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    department_id = Column(String(36), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)  # Nullable for guests
     title = Column(String(255), default="New Chat")
     created_at = Column(DateTime, default=datetime.utcnow)
-
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
 
 class ChatMessage(Base):

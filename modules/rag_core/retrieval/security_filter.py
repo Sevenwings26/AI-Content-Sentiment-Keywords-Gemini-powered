@@ -7,9 +7,9 @@ class RAGSecurityFilterBuilder:
     @staticmethod
     def build_search_filter(
         org_id: str,
-        department_id: Optional[str],
-        user_id: str,
-        user_role: UserRole,
+        department_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        user_role: Optional[UserRole] = UserRole.MEMBER,
         session_id: Optional[str] = None,
         scope: Optional[str] = None
     ) -> Filter:
@@ -25,20 +25,27 @@ class RAGSecurityFilterBuilder:
             )
 
         if scope == "personal":
-            or_clauses.append(FieldCondition(key="uploader_id", match=MatchValue(value=user_id)))
+            if user_id:
+                or_clauses.append(FieldCondition(key="uploader_id", match=MatchValue(value=user_id)))
             if session_id:
                 or_clauses.append(FieldCondition(key="session_id", match=MatchValue(value=session_id)))
-            return Filter(must=[tenant_condition], should=or_clauses)
+            return Filter(must=[tenant_condition], should=or_clauses if or_clauses else None)
 
         if user_role == UserRole.SUPER_ADMIN:
             return Filter(must=[tenant_condition])
 
+        # 1. Public Documents
         or_clauses.append(FieldCondition(key="access_level", match=MatchValue(value="PUBLIC")))
-        or_clauses.append(FieldCondition(key="uploader_id", match=MatchValue(value=user_id)))
 
+        # 2. User Uploads (Only if authenticated)
+        if user_id:
+            or_clauses.append(FieldCondition(key="uploader_id", match=MatchValue(value=user_id)))
+
+        # 3. Session Documents (Only if session_id provided)
         if session_id:
             or_clauses.append(FieldCondition(key="session_id", match=MatchValue(value=session_id)))
 
+        # 4. Department Documents (Only if department_id provided)
         if department_id:
             dept_acl_allowed = ["DEPARTMENT"]
             if user_role == UserRole.DEPT_ADMIN:
@@ -52,4 +59,4 @@ class RAGSecurityFilterBuilder:
             )
             or_clauses.append(dept_clause)
 
-        return Filter(must=[tenant_condition], should=or_clauses)
+        return Filter(must=[tenant_condition], should=or_clauses if or_clauses else None)

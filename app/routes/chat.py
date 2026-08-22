@@ -8,7 +8,7 @@ from modules.auth.domain.tokens import TokenData
 from modules.rag_core.orchestrator.unified_orchestrator import UnifiedRAGOrchestrator
 from modules.governance.repositories.chat_repository import ChatRepository
 from app.schemas.chat import (
-    ChatQueryPayload, ChatQueryResponse, SourceCitation, ChatSessionItem
+    ChatQueryPayload, ChatQueryResponse, SourceCitation, ChatSessionItem, ChatMessageItem
 )
 
 router = APIRouter(tags=["Unified Conversational RAG"])
@@ -29,7 +29,7 @@ def execute_chat_query(
         db=db,
         session_id=payload.session_id,
         org_id=user_context.org_id,
-        department_id=user_context.department_id or "",
+        department_id=user_context.department_id,
         user_id=user_context.user_id,
         title=session_title
     )
@@ -45,7 +45,8 @@ def execute_chat_query(
         persona_id=payload.persona_id,
         template_id=payload.template_id,
         top_k=payload.top_k,
-        score_threshold=payload.score_threshold
+        score_threshold=payload.score_threshold,
+        mode=payload.mode or "auto"
     )
 
     ChatRepository.add_message(
@@ -84,15 +85,48 @@ def list_chat_sessions(
     db: Session = Depends(get_db),
     auth_user: Optional[TokenData] = Depends(get_optional_user)
 ):
-    user_context = resolve_effective_user(auth_user, db)
-    sessions = ChatRepository.list_user_sessions(db, org_id=user_context.org_id, user_id=user_context.user_id)
+    if not auth_user or not auth_user.user_id:
+        return []  # Unauthenticated guests receive zero historical sessions
+
+    sessions = ChatRepository.list_user_sessions(
+        db,
+        org_id=auth_user.org_id,
+        user_id=auth_user.user_id
+    )
     return [
         ChatSessionItem(
             id=s.id,
             title=s.title,
-            created_at=s.created_at.isoformat()
+            created_at=s.created_at.isoformat() if s.created_at else ""
         )
         for s in sessions
+    ]
+
+@router.get("/chat/{session_id}/messages", response_model=List[ChatMessageItem])
+def get_session_messages(
+    session_id: str,
+    db: Session = Depends(get_db),
+    auth_user: Optional[TokenData] = Depends(get_optional_user)
+):
+    user_context = resolve_effective_user(auth_user, db)
+    session = ChatRepository.get_session_by_id(db, session_id, user_context.org_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+
+    # Access control: session owner, super admin, or guest session created in same context
+    if session.user_id and session.user_id != user_context.user_id and user_context.role != "SUPER_ADMIN":
+        raise HTTPException(status_code=403, detail="Access denied to this conversation thread")
+
+    messages = ChatRepository.get_session_messages(db, session_id)
+    return [
+        ChatMessageItem(
+            id=str(m.id),
+            role=m.role,
+            content=m.content,
+            created_at=m.created_at.isoformat() if m.created_at else "",
+            citation_metadata=m.citation_metadata
+        )
+        for m in messages
     ]
 
 @router.delete("/chat/{session_id}")

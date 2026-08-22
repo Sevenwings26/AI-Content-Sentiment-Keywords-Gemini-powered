@@ -1,534 +1,567 @@
 <!-- app/templates/index.html -->
-<!DOCTYPE html>
-<html lang="en">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RAG Assistant Workspace</title>
-    <!-- Google Fonts for modern aesthetics -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-primary: #ffffff;
-            --bg-secondary: #f8f9fa;
-            --border-color: #e9ecef;
-            --text-main: #212529;
-            --text-muted: #6c757d;
-            --accent-color: #000000;
-            --accent-text: #ffffff;
+{% block title %}RAG Assistant Workspace - Enterprise AI Platform{% endblock %}
 
-            /* Modern Chat Bubble Colors */
-            --user-bubble: #1f2022;
-            --user-bubble-text: #ffffff;
-            --assistant-bubble: #f1f3f4;
-            --assistant-bubble-text: #202124;
-        }
+{% block extra_head %}
+<!-- Markdown, Sanitizer & Code Highlighter CDNs -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+<style>
+    .workspace-wrapper {
+        display: flex;
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
+        background-color: var(--bg-canvas);
+        position: relative;
+    }
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-primary);
-            color: var(--text-main);
-            height: 100vh;
-            display: flex;
-            overflow: hidden;
-        }
+    /* -------------------------------------------------------------
+       Sidebar Navigation & Session History
+       ------------------------------------------------------------- */
+    .sidebar {
+        width: var(--sidebar-width);
+        background-color: var(--bg-surface);
+        border-right: 1px solid var(--border-subtle);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        z-index: 50;
+        transition: transform var(--transition-normal);
+    }
 
-        /* Sidebar Styling */
+    .sidebar-header {
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .new-chat-btn {
+        flex: 1;
+        padding: 10px 14px;
+        background-color: var(--accent-primary);
+        color: var(--accent-primary-text);
+        border: 1px solid var(--accent-primary);
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: all var(--transition-fast);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .new-chat-btn:hover {
+        background-color: var(--accent-primary-hover);
+        transform: translateY(-1px);
+    }
+
+    .sessions-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .session-item-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-radius: var(--radius-md);
+        transition: background-color var(--transition-fast);
+        position: relative;
+    }
+
+    .session-item-container:hover {
+        background-color: var(--bg-subtle);
+    }
+
+    .session-item-container.active {
+        background-color: var(--bg-hover);
+    }
+
+    .session-item {
+        flex: 1;
+        padding: 10px 12px;
+        color: var(--text-primary);
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .session-item-container.active .session-item {
+        font-weight: 600;
+    }
+
+    .delete-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 6px 8px;
+        border-radius: var(--radius-sm);
+        opacity: 0;
+        transition: all var(--transition-fast);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+    }
+
+    .session-item-container:hover .delete-btn,
+    .session-item-container.active .delete-btn {
+        opacity: 1;
+    }
+
+    .delete-btn:hover {
+        color: var(--color-danger);
+        background-color: var(--color-danger-bg);
+    }
+
+    .sidebar-footer {
+        padding: 14px 18px;
+        border-top: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    /* -------------------------------------------------------------
+       Main Chat Workspace
+       ------------------------------------------------------------- */
+    .workspace-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background-color: var(--bg-canvas);
+        position: relative;
+    }
+
+    /* Workspace Header */
+    .workspace-header {
+        padding: 14px 28px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background-color: var(--bg-surface);
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .workspace-title h2 {
+        font-size: 15px;
+        font-weight: 600;
+    }
+
+    .workspace-title p {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+        font-family: var(--font-mono);
+    }
+
+    .workspace-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .mobile-menu-toggle {
+        display: none;
+        background: transparent;
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        font-size: 18px;
+        cursor: pointer;
+        padding: 6px 10px;
+        border-radius: var(--radius-md);
+    }
+
+    /* Chat Feed */
+    .chat-feed {
+        flex: 1;
+        overflow-y: auto;
+        padding: 28px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .message {
+        display: flex;
+        flex-direction: column;
+        max-width: 80%;
+        animation: messageFadeIn 0.2s ease-out;
+    }
+
+    @keyframes messageFadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+        align-self: flex-end;
+    }
+
+    .message.assistant {
+        align-self: flex-start;
+        max-width: 88%;
+    }
+
+    .message-role-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .message-bubble {
+        padding: 14px 20px;
+        border-radius: var(--radius-lg);
+        font-size: 14px;
+        line-height: 1.6;
+        word-wrap: break-word;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .message.user .message-bubble {
+        background-color: var(--accent-primary);
+        color: var(--accent-primary-text);
+        border-bottom-right-radius: var(--radius-sm);
+    }
+
+    .message.assistant .message-bubble {
+        background-color: var(--bg-surface);
+        color: var(--text-primary);
+        border: 1px solid var(--border-subtle);
+        border-bottom-left-radius: var(--radius-sm);
+    }
+
+    /* Citation Tags */
+    .sources-container {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--border-subtle);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .source-tag {
+        font-size: 11px;
+        padding: 4px 10px;
+        background-color: var(--bg-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        color: var(--text-secondary);
+        font-weight: 500;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all var(--transition-fast);
+    }
+
+    .source-tag:hover {
+        background-color: var(--bg-hover);
+        color: var(--text-primary);
+        border-color: var(--text-muted);
+    }
+
+    .source-score-badge {
+        background-color: var(--color-success-bg);
+        color: var(--color-success-text);
+        font-size: 10px;
+        padding: 1px 5px;
+        border-radius: var(--radius-sm);
+        font-weight: 700;
+    }
+
+    /* Input Bar Area */
+    .input-container {
+        padding: 18px 32px 24px 32px;
+        border-top: 1px solid var(--border-subtle);
+        background-color: var(--bg-canvas);
+        position: relative;
+    }
+
+    .attached-files-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .file-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        background-color: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-full);
+        font-size: 12px;
+        color: var(--text-primary);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .remove-doc-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 12px;
+        line-height: 1;
+        padding: 2px 4px;
+        border-radius: 50%;
+        transition: all var(--transition-fast);
+    }
+
+    .remove-doc-btn:hover {
+        color: var(--color-danger);
+        background-color: var(--color-danger-bg);
+    }
+
+    .input-bar {
+        display: flex;
+        align-items: center;
+        background-color: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-xl);
+        padding: 6px 8px 6px 18px;
+        gap: 10px;
+        box-shadow: var(--shadow-sm);
+        transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .input-bar:focus-within {
+        border-color: var(--border-active);
+        box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.08);
+    }
+
+    .attachment-btn {
+        cursor: pointer;
+        font-size: 18px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        transition: all var(--transition-fast);
+    }
+
+    .attachment-btn:hover {
+        background-color: var(--bg-subtle);
+        color: var(--text-primary);
+    }
+
+    .input-bar input[type="text"] {
+        flex: 1;
+        border: none;
+        background: transparent;
+        font-size: 14px;
+        outline: none;
+        color: var(--text-primary);
+        padding: 8px 0;
+    }
+
+    .send-btn {
+        background-color: var(--accent-primary);
+        color: var(--accent-primary-text);
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .send-btn:hover {
+        background-color: var(--accent-primary-hover);
+        transform: scale(1.05);
+    }
+
+    .upload-progress-box {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 8px;
+        display: none;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Drag & Drop Full Page Overlay */
+    .drag-drop-overlay {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(8px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+        color: #FFFFFF;
+        text-align: center;
+        border: 3px dashed #38BDF8;
+    }
+
+    /* -------------------------------------------------------------
+       Mobile Responsive Drawer (<768px)
+       ------------------------------------------------------------- */
+    @media (max-width: 768px) {
+        .mobile-menu-toggle { display: block; }
+
         .sidebar {
-            width: 280px;
-            background-color: var(--bg-secondary);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            transform: translateX(-100%);
+            box-shadow: var(--shadow-xl);
         }
 
-        .sidebar-header {
-            padding: 20px;
-            border-bottom: 1px solid var(--border-color);
+        .sidebar.mobile-open {
+            transform: translateX(0);
         }
 
-        .new-chat-btn {
-            width: 100%;
-            padding: 12px;
-            background-color: var(--accent-color);
-            color: var(--accent-text);
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: opacity 0.2s ease;
-        }
+        .chat-feed { padding: 18px 16px; }
+        .input-container { padding: 14px 16px 18px 16px; }
+        .message { max-width: 92%; }
+    }
+</style>
+{% endblock %}
 
-        .new-chat-btn:hover {
-            opacity: 0.85;
-        }
+{% block content %}
+<div class="workspace-wrapper" id="workspace-wrapper">
 
-        .sessions-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-        }
-
-        .session-item-container {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 6px;
-            border-radius: 8px;
-            transition: background-color 0.2s ease;
-        }
-
-        .session-item-container:hover {
-            background-color: var(--border-color);
-        }
-
-        .session-item-container.active {
-            background-color: #e9ecef;
-        }
-
-        .session-item {
-            flex: 1;
-            padding: 12px 8px 12px 14px;
-            color: var(--text-main);
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .session-item-container.active .session-item {
-            font-weight: 600;
-        }
-
-        .delete-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            padding: 8px 10px;
-            border-radius: 6px;
-            opacity: 0;
-            transition: opacity 0.2s ease, color 0.2s ease, background-color 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-        }
-
-        .session-item-container:hover .delete-btn,
-        .session-item-container.active .delete-btn {
-            opacity: 1;
-        }
-
-        .delete-btn:hover {
-            color: #e63946;
-            background-color: rgba(230, 57, 70, 0.1);
-        }
-
-        /* Workspace Styling */
-        .workspace {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background-color: var(--bg-primary);
-        }
-
-        /* Workspace Header */
-        .workspace-header {
-            padding: 16px 24px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .workspace-title h2 {
-            font-size: 16px;
-            font-weight: 600;
-        }
-
-        .workspace-title p {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-top: 2px;
-        }
-
-        .workspace-actions {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .header-delete-btn {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-muted);
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .header-delete-btn:hover {
-            color: #e63946;
-            border-color: #e63946;
-            background-color: rgba(230, 57, 70, 0.05);
-        }
-
-        .model-badge {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 12px;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--text-muted);
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background-color: #2ec4b6;
-            border-radius: 50%;
-        }
-
-        /* Role-Based Nav Actions */
-        .admin-dashboard-link {
-            display: none;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            background: linear-gradient(135deg, #0284c7, #6366f1);
-            color: #ffffff;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-decoration: none;
-            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
-            transition: all 0.2s ease;
-        }
-
-        .admin-dashboard-link:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-        }
-
-        .user-profile-badge {
-            display: none;
-            align-items: center;
-            gap: 8px;
-            padding: 5px 12px;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            font-size: 12px;
-            color: var(--text-main);
-            font-weight: 500;
-        }
-
-        .user-role-tag {
-            font-size: 10px;
-            font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 6px;
-            background: rgba(56, 189, 248, 0.15);
-            color: #0284c7;
-            text-transform: uppercase;
-        }
-
-        .auth-nav-btn {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-            text-decoration: none;
-            cursor: pointer;
-            border: 1px solid var(--border-color);
-            background: transparent;
-            color: var(--text-main);
-            transition: all 0.2s ease;
-        }
-
-        .auth-nav-btn:hover {
-            background-color: var(--border-color);
-        }
-
-        .auth-nav-btn.login-btn {
-            background: #000;
-            color: #fff;
-            border-color: #000;
-        }
-
-        .auth-nav-btn.login-btn:hover {
-            opacity: 0.85;
-        }
-
-        /* Chat Feed */
-        .chat-feed {
-            flex: 1;
-            overflow-y: auto;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .message {
-            display: flex;
-            flex-direction: column;
-            max-width: 75%;
-        }
-
-        .message.user {
-            align-self: flex-end;
-        }
-
-        .message.assistant {
-            align-self: flex-start;
-        }
-
-        .message-bubble {
-            padding: 12px 18px;
-            border-radius: 16px;
-            font-size: 14px;
-            line-height: 1.5;
-            word-wrap: break-word;
-        }
-
-        .message.user .message-bubble {
-            background-color: var(--user-bubble);
-            color: var(--user-bubble-text);
-            border-bottom-right-radius: 4px;
-        }
-
-        .message.assistant .message-bubble {
-            background-color: var(--assistant-bubble);
-            color: var(--assistant-bubble-text);
-            border-bottom-left-radius: 4px;
-        }
-
-        .sources-container {
-            margin-top: 8px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        .source-tag {
-            font-size: 11px;
-            padding: 4px 8px;
-            background-color: rgba(0, 0, 0, 0.05);
-            border-radius: 4px;
-            color: var(--text-muted);
-            font-weight: 500;
-        }
-
-        /* Input Bar Area */
-        .input-container {
-            padding: 16px 24px;
-            border-top: 1px solid var(--border-color);
-            background-color: var(--bg-primary);
-        }
-
-        .attached-files-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-
-        .file-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 10px;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            font-size: 12px;
-            color: var(--text-main);
-        }
-
-        .file-pill-icon {
-            font-size: 14px;
-        }
-
-        .remove-doc-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 12px;
-            line-height: 1;
-            padding: 2px 4px;
-            border-radius: 50%;
-            transition: all 0.2s ease;
-            margin-left: 2px;
-        }
-
-        .remove-doc-btn:hover {
-            color: #e63946;
-            background-color: rgba(230, 57, 70, 0.15);
-        }
-
-        .input-bar {
-            display: flex;
-            align-items: center;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 24px;
-            padding: 4px 8px 4px 16px;
-            gap: 8px;
-        }
-
-        .attachment-btn {
-            cursor: pointer;
-            font-size: 18px;
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            transition: background-color 0.2s ease;
-        }
-
-        .attachment-btn:hover {
-            background-color: var(--border-color);
-            color: var(--text-main);
-        }
-
-        .input-bar input[type="text"] {
-            flex: 1;
-            border: none;
-            background: transparent;
-            font-size: 14px;
-            outline: none;
-            color: var(--text-main);
-            padding: 8px 0;
-        }
-
-        .send-btn {
-            background-color: var(--accent-color);
-            color: var(--accent-text);
-            border: none;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: opacity 0.2s ease;
-        }
-
-        .send-btn:hover {
-            opacity: 0.85;
-        }
-
-        .upload-progress-indicator {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-top: 6px;
-            display: none;
-        }
-    </style>
-</head>
-
-<body>
-
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <button class="new-chat-btn" onclick="createNewChat()">+ New Chat</button>
+    <!-- Drag & Drop Overlay -->
+    <div class="drag-drop-overlay" id="drag-drop-overlay">
+        <div>
+            <div style="font-size: 48px; margin-bottom: 12px;">📥</div>
+            <h2 style="font-size: 20px; font-weight: 700; color: #FFFFFF;">Drop document to ingest & ground chat</h2>
+            <p style="font-size: 13px; color: #94A3B8; margin-top: 4px;">Supports PDF, DOCX, TXT, and Markdown files</p>
         </div>
+    </div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <button type="button" class="new-chat-btn" onclick="createNewChat()">
+                <span>+</span>
+                <span>New Session</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-icon mobile-menu-toggle" onclick="toggleMobileSidebar()" style="display: none;" id="sidebar-close-btn">
+                ✕
+            </button>
+        </div>
+
         <div class="sessions-list" id="sessions-list">
             {% for s in sessions %}
             <div class="session-item-container {% if s.id == session_id %}active{% endif %}" id="session-item-{{ s.id }}">
-                <a href="/chat/{{ s.id }}" class="session-item">
+                <a href="/chat/{{ s.id }}" class="session-item" title="{{ s.title if s.title else 'Untitled Chat' }}">
                     {{ s.title if s.title else "Untitled Chat" }}
                 </a>
-                <button class="delete-btn" onclick="deleteChat('{{ s.id }}', event)" title="Delete Chat & Files">
+                <button type="button" class="delete-btn" onclick="handleDeleteSession('{{ s.id }}', event)" title="Delete session & vectors">
                     🗑️
                 </button>
             </div>
             {% endfor %}
         </div>
-    </div>
+
+        <div class="sidebar-footer">
+            <div class="flex items-center gap-2">
+                <button type="button" class="btn btn-outline btn-icon" data-theme-toggle onclick="Theme.toggle()" title="Toggle Light/Dark Theme">
+                    <span class="theme-toggle-icon">🌙</span>
+                </button>
+                <span class="text-xs text-muted" id="tenant-slug-sidebar">Enterprise RAG</span>
+            </div>
+        </div>
+    </aside>
 
     <!-- Main Workspace -->
-    <div class="workspace">
+    <main class="workspace-main">
+
         <!-- Workspace Header -->
-        <div class="workspace-header">
-            <div class="workspace-title">
-                <h2>Assistant Session</h2>
-                <p id="session-id-display">{% if session_id %}ID: {{ session_id }}{% else %}New Draft Workspace{% endif %}</p>
+        <header class="workspace-header">
+            <div class="flex items-center gap-3">
+                <button type="button" class="mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Toggle sessions menu">
+                    ☰
+                </button>
+                <div class="workspace-title">
+                    <h2>Cognitive RAG Workspace</h2>
+                    <p id="session-id-display">{% if session_id %}ID: {{ session_id }}{% else %}New Draft Workspace{% endif %}</p>
+                </div>
             </div>
 
             <div class="workspace-actions">
-                <!-- Role-Based Admin Dashboard Entry (Visible only to SUPER_ADMIN and DEPT_ADMIN) -->
-                <a href="/enterprise/dashboard" id="nav-admin-btn" class="admin-dashboard-link">
-                    ⚙️ Enterprise Dashboard
+                <!-- Role-Based Admin Entry -->
+                <a href="/enterprise/dashboard" id="nav-admin-btn" class="btn btn-primary btn-sm" style="display: none;">
+                    ⚙️ Enterprise Governance
                 </a>
 
                 <!-- User Profile & Clearance Badge -->
-                <div id="nav-user-badge" class="user-profile-badge">
-                    <span id="nav-user-name">User</span>
-                    <span id="nav-user-role" class="user-role-tag">MEMBER</span>
+                <div id="nav-user-badge" class="badge badge-default" style="display: none; padding: 6px 12px; gap: 8px;">
+                    <span id="nav-user-name" style="font-weight: 600;">User</span>
+                    <span id="nav-user-role" class="badge badge-role-member">MEMBER</span>
                 </div>
 
-                <!-- Auth Navigation (Login / Sign Out) -->
+                <!-- Auth Navigation -->
                 <div id="nav-auth-container">
-                    <a href="/enterprise/login" id="nav-login-btn" class="auth-nav-btn login-btn">🔑 Sign In</a>
-                    <button id="nav-logout-btn" class="auth-nav-btn" style="display: none;" onclick="handleUserLogout()">Sign Out</button>
+                    <a href="/enterprise/login" id="nav-login-btn" class="btn btn-outline btn-sm">🔑 Sign In</a>
+                    <button type="button" id="nav-logout-btn" class="btn btn-ghost btn-sm" style="display: none;" onclick="Auth.logout()">Sign Out</button>
                 </div>
 
                 {% if session_id %}
-                <button class="header-delete-btn" id="header-delete-btn" onclick="deleteChat('{{ session_id }}')" title="Delete Chat Session and Attached Files">
-                    🗑️ Delete
+                <button type="button" class="btn btn-danger btn-sm" id="header-delete-btn" onclick="handleDeleteSession('{{ session_id }}')" title="Delete Chat Session and Attached Files">
+                    🗑️ Delete Session
                 </button>
                 {% endif %}
 
-                <div class="model-badge">
-                    <span class="status-dot"></span>
-                    <span>RAG Engine</span>
+                <div class="badge badge-acl-public">
+                    <span style="width: 6px; height: 6px; border-radius: 50%; background-color: var(--color-success);"></span>
+                    <span>Qdrant Grounded</span>
                 </div>
             </div>
-        </div>
+        </header>
 
         <!-- Chat Feed -->
         <div class="chat-feed" id="chat-feed">
             {% if not messages %}
             <div class="message assistant">
-                <div class="message-bubble">
-                    Hello! You can ask general questions, or click the <strong>+</strong> button in the message bar to
-                    upload a document (PDF or TXT) and ask questions directly grounded in its contents.
+                <div class="message-role-label">AI Assistant</div>
+                <div class="message-bubble markdown-body">
+                    <p>Welcome to the <strong>Enterprise Multi-Tenant Cognitive Assistant</strong>.</p>
+                    <p>You can ask general inquiries, or attach a document using the <strong>+</strong> button (or drag-and-drop a file) to ground responses directly in departmental knowledge.</p>
                 </div>
             </div>
             {% else %}
             {% for msg in messages %}
             <div class="message {{ msg.role }}">
-                <div class="message-bubble">
+                <div class="message-role-label">{{ 'You' if msg.role == 'user' else 'AI Assistant' }}</div>
+                <div class="message-bubble markdown-body" data-raw-content="{{ msg.content }}">
                     {{ msg.content }}
                 </div>
             </div>
@@ -536,37 +569,34 @@
             {% endif %}
         </div>
 
-        <!-- Message Input Area -->
+        <!-- Input Area -->
         <div class="input-container">
 
-            <!-- Document List (Pill Badges) above input field -->
+            <!-- Attached Documents List -->
             <div class="attached-files-container" id="attached-files-list">
                 {% if documents %}
                 {% for doc in documents %}
-                <div class="file-pill">
-                    <span class="file-pill-icon">📄</span>
-                    <span class="file-pill-name" title="{{ doc.filename }}">{{ doc.filename }}</span>
-                    <button class="remove-doc-btn" onclick="deleteDocument('{{ doc.filename }}', this)" title="Remove document & vectors">✕</button>
+                <div class="file-pill" id="file-pill-{{ doc.id if doc.id else doc.filename }}">
+                    <span>📄</span>
+                    <span title="{{ doc.filename }}" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ doc.filename }}</span>
+                    <button type="button" class="remove-doc-btn" onclick="handleDeleteDoc('{{ doc.id if doc.id else '' }}', '{{ doc.filename }}', this)" title="Remove document">✕</button>
                 </div>
                 {% endfor %}
                 {% endif %}
             </div>
 
+            <!-- Message Form -->
             <form id="chat-form" onsubmit="handleSendMessage(event)">
                 <div class="input-bar">
-                    <!-- Circular '+' attachment button -->
-                    <label class="attachment-btn" title="Add Document (PDF or TXT)">
+                    <label class="attachment-btn" title="Attach Document (PDF, DOCX, TXT)">
                         +
-                        <input type="file" id="file-input" style="display: none;" onchange="handleFileUpload()">
+                        <input type="file" id="file-input" style="display: none;" onchange="handleFileInputUpload(this)">
                     </label>
 
-                    <input type="text" id="user-input" placeholder="Ask your assistant or upload files..." required
-                        autocomplete="off">
+                    <input type="text" id="user-input" placeholder="Ask a grounded question or upload files..." required autocomplete="off">
 
-                    <button type="submit" class="send-btn" title="Send message">
-                        <!-- Send SVG Icon -->
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <button type="submit" class="send-btn" id="send-btn" title="Send message">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="22" y1="2" x2="11" y2="13"></line>
                             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                         </svg>
@@ -574,320 +604,417 @@
                 </div>
             </form>
 
-            <div class="upload-progress-indicator" id="upload-status">Indexing document...</div>
+            <div class="upload-progress-box" id="upload-status">
+                <span class="spinner"></span>
+                <span id="upload-status-text">Indexing document into vector store...</span>
+            </div>
         </div>
-    </div>
 
-    <script>
-        let sessionId = "{{ session_id if session_id else '' }}";
-        const chatFeed = document.getElementById("chat-feed");
+    </main>
+</div>
+{% endblock %}
 
-        // Initialize user authentication and role badge
-        function initAuthState() {
-            const userStr = localStorage.getItem("enterprise_user");
-            const token = localStorage.getItem("enterprise_token");
-            if (userStr && token) {
-                try {
-                    const user = JSON.parse(userStr);
-                    document.getElementById("nav-user-name").innerText = user.full_name || user.email;
-                    document.getElementById("nav-user-role").innerText = user.role || "MEMBER";
-                    document.getElementById("nav-user-badge").style.display = "flex";
-                    document.getElementById("nav-login-btn").style.display = "none";
-                    document.getElementById("nav-logout-btn").style.display = "inline-block";
+{% block scripts %}
+<script>
+    let sessionId = "{{ session_id if session_id else '' }}";
+    const chatFeed = document.getElementById("chat-feed");
 
-                    // Role-Based Admin Entry: Visible ONLY to SUPER_ADMIN & DEPT_ADMIN
-                    if (user.role === "SUPER_ADMIN" || user.role === "DEPT_ADMIN") {
-                        document.getElementById("nav-admin-btn").style.display = "inline-flex";
-                    } else {
-                        document.getElementById("nav-admin-btn").style.display = "none";
-                    }
-                } catch(e) {}
-            } else {
-                document.getElementById("nav-user-badge").style.display = "none";
-                document.getElementById("nav-admin-btn").style.display = "none";
-                document.getElementById("nav-login-btn").style.display = "inline-block";
-                document.getElementById("nav-logout-btn").style.display = "none";
+    // Configure Marked.js for Code Highlighting
+    if (typeof marked !== 'undefined') {
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
+                    return hljs.highlight(code, { language: lang }).value;
+                }
+                return typeof hljs !== 'undefined' ? hljs.highlightAuto(code).value : code;
+            },
+            breaks: true,
+            gfm: true
+        });
+    }
+
+    // Markdown Parser Helper
+    function renderMarkdown(rawText) {
+        if (!rawText) return '';
+        if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            const rawHtml = marked.parse(rawText);
+            return DOMPurify.sanitize(rawHtml);
+        }
+        return escapeHTML(rawText).replace(/\n/g, '<br>');
+    }
+
+    // Format server-rendered messages on initial load
+    document.querySelectorAll('.message.assistant .message-bubble[data-raw-content]').forEach(el => {
+        const raw = el.getAttribute('data-raw-content');
+        if (raw) {
+            el.innerHTML = renderMarkdown(raw);
+        }
+    });
+
+    // Mobile Sidebar Drawer Toggle
+    function toggleMobileSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('mobile-open');
+    }
+
+    // Initialize Auth & Profile State
+    function initUserInterface() {
+        const user = Auth.getUser();
+        if (user && Auth.isAuthenticated()) {
+            document.getElementById("nav-user-name").textContent = user.full_name || user.email;
+            document.getElementById("nav-user-role").textContent = user.role || "MEMBER";
+            document.getElementById("nav-user-role").className = `badge badge-role-${(user.role || 'member').toLowerCase()}`;
+            document.getElementById("nav-user-badge").style.display = "inline-flex";
+            document.getElementById("nav-login-btn").style.display = "none";
+            document.getElementById("nav-logout-btn").style.display = "inline-block";
+
+            if (Auth.hasAdminAccess()) {
+                document.getElementById("nav-admin-btn").style.display = "inline-flex";
             }
         }
-
-        function handleUserLogout() {
-            localStorage.removeItem("enterprise_token");
-            localStorage.removeItem("enterprise_admin_token");
-            localStorage.removeItem("enterprise_user");
-            window.location.href = "/enterprise/login";
-        }
-
-        // Scroll chat feed to bottom on load
         chatFeed.scrollTop = chatFeed.scrollHeight;
-        initAuthState();
+    }
 
-        // Load User Scoped Sessions dynamically
-        async function loadUserSessions() {
-            const token = localStorage.getItem("enterprise_token");
-            if (!token) return;
+    // Dynamic Scoped Session Loader
+    async function loadUserSessions() {
+        const sessionsList = document.getElementById("sessions-list");
+        if (!sessionsList) return;
 
-            try {
-                const response = await fetch("/chat/sessions", {
-                    headers: { "Authorization": "Bearer " + token }
-                });
-                if (!response.ok) return;
-                const userSessions = await response.json();
-
-                const sessionsList = document.getElementById("sessions-list");
-                if (!sessionsList) return;
-
-                sessionsList.innerHTML = "";
-                userSessions.forEach(s => {
-                    const containerDiv = document.createElement("div");
-                    containerDiv.className = "session-item-container " + (s.id === sessionId ? "active" : "");
-                    containerDiv.id = "session-item-" + s.id;
-                    containerDiv.innerHTML = `
-                        <a href="/chat/${s.id}" class="session-item">${s.title || "Untitled Chat"}</a>
-                        <button class="delete-btn" onclick="deleteChat('${s.id}', event)" title="Delete Chat & Files">🗑️</button>
-                    `;
-                    sessionsList.appendChild(containerDiv);
-                });
-            } catch (err) {
-                console.error("Failed to load user sessions:", err);
-            }
-        }
-        window.addEventListener("DOMContentLoaded", loadUserSessions);
-
-
-        // Redirect to create a clean unpersisted session
-        function createNewChat() {
-            window.location.href = "/";
+        if (!Auth.isAuthenticated()) {
+            sessionsList.innerHTML = "";
+            return;
         }
 
-        // Helper to seamlessly promote unpersisted session to a persisted database session
-        function promoteSessionIfNeeded(newSessionId, newTitle) {
-            if (!sessionId && newSessionId) {
-                sessionId = newSessionId;
-                // Update browser URL without full page refresh
-                window.history.pushState({}, "", "/chat/" + sessionId);
+        try {
+            const userSessions = await fetchAPI("/chat/sessions");
+            if (!userSessions || !Array.isArray(userSessions)) return;
 
-                // Update Workspace Header display
-                const displayEl = document.getElementById("session-id-display");
-                if (displayEl) {
-                    displayEl.innerText = "ID: " + sessionId;
-                }
-
-                // Inject Header Delete Button
-                const actionsContainer = document.querySelector(".workspace-actions");
-                if (actionsContainer && !document.getElementById("header-delete-btn")) {
-                    const deleteBtn = document.createElement("button");
-                    deleteBtn.className = "header-delete-btn";
-                    deleteBtn.id = "header-delete-btn";
-                    deleteBtn.onclick = () => deleteChat(sessionId);
-                    deleteBtn.title = "Delete Chat Session and Attached Files";
-                    deleteBtn.innerHTML = "🗑️ Delete Session";
-                    actionsContainer.prepend(deleteBtn);
-                }
-
-                // Prepend session entry to sidebar
-                const sessionsList = document.querySelector(".sessions-list");
-                if (sessionsList) {
-                    const containerDiv = document.createElement("div");
-                    containerDiv.className = "session-item-container active";
-                    containerDiv.id = "session-item-" + sessionId;
-                    containerDiv.innerHTML = `
-                        <a href="/chat/${sessionId}" class="session-item">
-                            ${newTitle || "New Chat Session"}
-                        </a>
-                        <button class="delete-btn" onclick="deleteChat('${sessionId}', event)" title="Delete Chat & Files">
-                            🗑️
-                        </button>
-                    `;
-                    sessionsList.prepend(containerDiv);
-                }
-            }
+            sessionsList.innerHTML = "";
+            userSessions.forEach(s => {
+                const container = document.createElement("div");
+                container.className = `session-item-container ${s.id === sessionId ? 'active' : ''}`;
+                container.id = `session-item-${s.id}`;
+                container.innerHTML = `
+                    <a href="/chat/${s.id}" class="session-item" title="${escapeHTML(s.title || 'Untitled Chat')}">
+                        ${escapeHTML(s.title || 'Untitled Chat')}
+                    </a>
+                    <button type="button" class="delete-btn" onclick="handleDeleteSession('${s.id}', event)" title="Delete session & vectors">
+                        🗑️
+                    </button>
+                `;
+                sessionsList.appendChild(container);
+            });
+        } catch (err) {
+            console.warn("Could not load user sessions:", err);
         }
+    }
 
-        // Helper to dynamically append file pill badge to UI
-        function appendFilePill(filename) {
-            const container = document.getElementById("attached-files-list");
-            if (!container) return;
-            const pill = document.createElement("div");
-            pill.className = "file-pill";
-            pill.innerHTML = `
-                <span class="file-pill-icon">📄</span>
-                <span class="file-pill-name" title="${filename}">${filename}</span>
-                <button class="remove-doc-btn" onclick="deleteDocument('${filename}', this)" title="Remove document & vectors">✕</button>
-            `;
-            container.appendChild(pill);
-        }
+    // Dynamic Session Messages Loader
+    async function loadSessionMessages() {
+        if (!sessionId) return;
+        try {
+            const messages = await fetchAPI(`/chat/${sessionId}/messages`);
+            if (!messages || !Array.isArray(messages)) return;
 
-        // Handle File Ingestion
-        async function handleFileUpload() {
-            const fileInput = document.getElementById("file-input");
-            if (fileInput.files.length === 0) return;
-
-            const file = fileInput.files[0];
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("session_id", sessionId);
-
-            const statusLabel = document.getElementById("upload-status");
-            statusLabel.style.display = "block";
-            statusLabel.innerText = `Indexing "${file.name}"...`;
-
-            try {
-                const token = localStorage.getItem("enterprise_token"); const headers = {}; if (token) headers["Authorization"] = "Bearer " + token;
-            const response = await fetch("/chat/upload", {
-                headers: headers,
-                    method: "POST",
-                    body: formData
-                });
-                const data = await response.json();
-
-                if (data.status === "success") {
-                    promoteSessionIfNeeded(data.session_id, data.session_title);
-                    statusLabel.innerText = "Document processed successfully!";
-                    statusLabel.style.color = "#2ec4b6";
-                    appendFilePill(file.name);
-                    setTimeout(() => { statusLabel.style.display = "none"; }, 3000);
-                } else {
-                    statusLabel.innerText = "Indexing failed: " + data.message;
-                    statusLabel.style.color = "red";
-                }
-            } catch (err) {
-                statusLabel.innerText = "Connection error. Ingestion failed.";
-                statusLabel.style.color = "red";
-            }
-        }
-
-        // Handle Document Deletion (purges PostgreSQL metadata record AND Qdrant vector chunks for this file)
-        async function deleteDocument(filename, btnElement) {
-            if (!sessionId) return;
-            if (!confirm(`Are you sure you want to remove "${filename}" and its vector index?`)) return;
-
-            try {
-                const response = await fetch(`/chat/${sessionId}/document/${encodeURIComponent(filename)}`, {
-                    method: "DELETE"
-                });
-                const data = await response.json();
-
-                if (data.status === "success") {
-                    const pill = btnElement.closest(".file-pill");
-                    if (pill) pill.remove();
-                } else {
-                    alert("Failed to remove document: " + data.message);
-                }
-            } catch (err) {
-                alert("Connection error. Unable to remove document.");
-            }
-        }
-
-        // Handle Message Submission
-        async function handleSendMessage(event) {
-            event.preventDefault();
-            const inputField = document.getElementById("user-input");
-            const query = inputField.value.trim();
-            if (!query) return;
-
-            // Clear input box immediately
-            inputField.value = "";
-
-            // 1. Append User Message to UI
-            appendMessage("user", query);
-
-            // 2. Append Assistant Loading Bubble
-            const loadingBubbleId = appendMessage("assistant", "Thinking...");
-
-            try {
-                const headers = { "Content-Type": "application/json" };
-                const token = localStorage.getItem("enterprise_token");
-                if (token) {
-                    headers["Authorization"] = "Bearer " + token;
-                }
-
-                const response = await fetch("/chat/query", {
-                    method: "POST",
-                    headers: headers,
-                    body: JSON.stringify({ query: query, session_id: sessionId })
-                });
-                const data = await response.json();
-
-                // Remove loading bubble
-                document.getElementById(loadingBubbleId).remove();
-
-                if (data.status === "success") {
-                    promoteSessionIfNeeded(data.session_id, data.session_title);
-                    appendMessage("assistant", data.answer, data.sources);
-                } else {
-                    appendMessage("assistant", "Error: " + data.message);
-                }
-            } catch (err) {
-                document.getElementById(loadingBubbleId).remove();
-                appendMessage("assistant", "Unable to reach server. Please check connection.");
-            }
-        }
-
-        // Handle Chat Deletion (purges PostgreSQL session/messages/docs AND Qdrant vector collection)
-        async function deleteChat(targetSessionId, event) {
-            if (event) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
-            if (!targetSessionId) return;
-
-            if (!confirm("Are you sure you want to delete this chat session and all associated files?")) {
-                return;
-            }
-
-            try {
-                const token = localStorage.getItem("enterprise_token"); const headers = {}; if (token) headers["Authorization"] = "Bearer " + token;
-            const response = await fetch("/chat/" + targetSessionId, {
-                headers: headers,
-                    method: "DELETE"
-                });
-                const data = await response.json();
-
-                if (data.status === "success") {
-                    // Remove item from sidebar DOM
-                    const itemEl = document.getElementById("session-item-" + targetSessionId);
-                    if (itemEl) itemEl.remove();
-
-                    // If deleted session was open, redirect to draft workspace
-                    if (targetSessionId === sessionId) {
-                        window.location.href = "/";
+            chatFeed.innerHTML = "";
+            if (messages.length === 0) {
+                const welcomeDiv = document.createElement("div");
+                welcomeDiv.className = "message assistant";
+                welcomeDiv.innerHTML = `
+                    <div class="message-role-label">AI Assistant</div>
+                    <div class="message-bubble markdown-body">
+                        <p>Welcome to the <strong>Enterprise Multi-Tenant Cognitive Assistant</strong>.</p>
+                        <p>You can ask general inquiries, or attach a document using the <strong>+</strong> button to ground responses directly in departmental knowledge.</p>
+                    </div>
+                `;
+                chatFeed.appendChild(welcomeDiv);
+            } else {
+                messages.forEach(msg => {
+                    if (msg.role === "user") {
+                        appendUserMessage(msg.content);
+                    } else {
+                        const meta = msg.citation_metadata || {};
+                        appendAssistantMessage(
+                            msg.content,
+                            meta.sources || [],
+                            meta.is_grounded !== false,
+                            meta.confidence || 1.0
+                        );
                     }
-                } else {
-                    alert("Failed to delete chat: " + data.message);
-                }
-            } catch (err) {
-                alert("Connection error. Could not delete chat session.");
-            }
-        }
-
-        // Helper to append elements to chat feed
-        function appendMessage(role, content, sources = []) {
-            const messageId = "msg-" + Date.now();
-            const messageDiv = document.createElement("div");
-            messageDiv.className = `message ${role}`;
-            messageDiv.id = messageId;
-
-            let sourceHtml = "";
-            if (sources && sources.length > 0) {
-                sourceHtml = `<div class="sources-container">`;
-                sources.forEach(src => {
-                    sourceHtml += `<span class="source-tag">Ref: ${src.filename}</span>`;
                 });
-                sourceHtml += `</div>`;
             }
-
-            messageDiv.innerHTML = `
-                <div class="message-bubble">
-                    ${content.replace(/\n/g, "<br>")}
-                    ${sourceHtml}
-                </div>
-            `;
-
-            chatFeed.appendChild(messageDiv);
             chatFeed.scrollTop = chatFeed.scrollHeight;
-            return messageId;
+        } catch (err) {
+            console.warn("Could not load session messages:", err);
         }
-    </script>
-</body>
+    }
 
-</html>
+    function createNewChat() {
+        window.location.href = "/";
+    }
+
+    function promoteSessionIfNeeded(newSessionId, newTitle) {
+        if (!sessionId && newSessionId) {
+            sessionId = newSessionId;
+            window.history.pushState({}, "", "/chat/" + sessionId);
+
+            const displayEl = document.getElementById("session-id-display");
+            if (displayEl) displayEl.textContent = "ID: " + sessionId;
+
+            // Prepend new session to sidebar
+            const sessionsList = document.getElementById("sessions-list");
+            if (sessionsList) {
+                const container = document.createElement("div");
+                container.className = "session-item-container active";
+                container.id = "session-item-" + sessionId;
+                container.innerHTML = `
+                    <a href="/chat/${sessionId}" class="session-item" title="${escapeHTML(newTitle || 'New Chat')}">
+                        ${escapeHTML(newTitle || 'New Chat')}
+                    </a>
+                    <button type="button" class="delete-btn" onclick="handleDeleteSession('${sessionId}', event)" title="Delete session & vectors">
+                        🗑️
+                    </button>
+                `;
+                sessionsList.prepend(container);
+            }
+        }
+    }
+
+    function appendFilePill(filename, docId = '') {
+        const container = document.getElementById("attached-files-list");
+        if (!container) return;
+        const pill = document.createElement("div");
+        pill.className = "file-pill";
+        pill.id = `file-pill-${docId || filename}`;
+        pill.innerHTML = `
+            <span>📄</span>
+            <span title="${escapeHTML(filename)}" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(filename)}</span>
+            <button type="button" class="remove-doc-btn" onclick="handleDeleteDoc('${docId}', '${escapeHTML(filename)}', this)" title="Remove document">✕</button>
+        `;
+        container.appendChild(pill);
+    }
+
+    // --- File Ingestion Handler ---
+    async function processFileUpload(file) {
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append("file", file);
+        if (sessionId) formData.append("session_id", sessionId);
+
+        const statusBox = document.getElementById("upload-status");
+        const statusText = document.getElementById("upload-status-text");
+        statusBox.style.display = "inline-flex";
+        statusText.textContent = `Indexing "${file.name}" into vector memory...`;
+
+        try {
+            const data = await fetchAPI("/chat/upload", {
+                method: "POST",
+                body: formData
+            });
+
+            if (data.session_id) {
+                promoteSessionIfNeeded(data.session_id, data.session_title);
+            }
+            appendFilePill(file.name, data.document_id);
+            Toast.success("Document Indexed", `"${file.name}" is now accessible for grounded queries.`);
+
+        } catch (err) {
+            Toast.error("Ingestion Failed", err.message || "Failed to parse document.");
+        } finally {
+            statusBox.style.display = "none";
+        }
+    }
+
+    function handleFileInputUpload(input) {
+        if (input.files && input.files[0]) {
+            processFileUpload(input.files[0]);
+            input.value = "";
+        }
+    }
+
+    // --- Document Deletion Handler ---
+    async function handleDeleteDoc(docId, filename, btnElement) {
+        const confirmed = await Modal.confirm(
+            'Remove Document?',
+            `Do you want to remove "${filename}" from this session?`,
+            'Yes, Remove'
+        );
+        if (!confirmed) return;
+
+        try {
+            if (docId) {
+                await fetchAPI(`/documents/${docId}`, { method: "DELETE" });
+            }
+            const pill = btnElement.closest(".file-pill");
+            if (pill) pill.remove();
+            Toast.success("Removed", `"${filename}" removed.`);
+        } catch (err) {
+            Toast.error("Error", err.message || "Failed to remove document.");
+        }
+    }
+
+    // --- Session Deletion Handler ---
+    async function handleDeleteSession(targetSessionId, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (!targetSessionId) return;
+
+        const confirmed = await Modal.confirm(
+            'Delete Chat Session?',
+            'All conversation messages and vector memory will be permanently deleted.',
+            'Yes, Delete Session',
+            'warning'
+        );
+        if (!confirmed) return;
+
+        try {
+            await fetchAPI(`/chat/${targetSessionId}`, { method: "DELETE" });
+            const item = document.getElementById(`session-item-${targetSessionId}`);
+            if (item) item.remove();
+            Toast.success("Session Deleted", "Chat session purged successfully.");
+
+            if (targetSessionId === sessionId) {
+                setTimeout(() => { window.location.href = "/"; }, 400);
+            }
+        } catch (err) {
+            Toast.error("Delete Failed", err.message || "Could not delete chat session.");
+        }
+    }
+
+    // --- Message Submission Handler ---
+    async function handleSendMessage(event) {
+        event.preventDefault();
+        const inputField = document.getElementById("user-input");
+        const query = inputField.value.trim();
+        if (!query) return;
+
+        inputField.value = "";
+
+        // 1. Append User Message Bubble
+        appendUserMessage(query);
+
+        // 2. Append Pulsating Skeleton Loading Bubble
+        const skeletonId = appendSkeletonBubble();
+
+        try {
+            const data = await fetchAPI("/chat/query", {
+                method: "POST",
+                body: { query: query, session_id: sessionId }
+            });
+
+            // Remove Skeleton Loader
+            const skeletonEl = document.getElementById(skeletonId);
+            if (skeletonEl) skeletonEl.remove();
+
+            if (data.status === "success") {
+                promoteSessionIfNeeded(data.session_id, data.session_title);
+                appendAssistantMessage(data.answer, data.sources, data.is_grounded, data.grounding_confidence);
+            } else {
+                appendAssistantMessage("⚠️ " + (data.message || "An unexpected error occurred."));
+            }
+        } catch (err) {
+            const skeletonEl = document.getElementById(skeletonId);
+            if (skeletonEl) skeletonEl.remove();
+            appendAssistantMessage("⚠️ **Connection Error:** Unable to reach AI orchestration engine. " + err.message);
+        }
+    }
+
+    function appendUserMessage(text) {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "message user";
+        msgDiv.innerHTML = `
+            <div class="message-role-label">You</div>
+            <div class="message-bubble">${escapeHTML(text).replace(/\n/g, '<br>')}</div>
+        `;
+        chatFeed.appendChild(msgDiv);
+        chatFeed.scrollTop = chatFeed.scrollHeight;
+    }
+
+    function appendSkeletonBubble() {
+        const id = "skeleton-" + Date.now();
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "message assistant";
+        msgDiv.id = id;
+        msgDiv.innerHTML = `
+            <div class="message-role-label">AI Assistant</div>
+            <div class="message-bubble pulse" style="min-width: 240px;">
+                <div class="skeleton skeleton-text" style="width: 80%;"></div>
+                <div class="skeleton skeleton-text" style="width: 60%;"></div>
+                <div class="skeleton skeleton-text short"></div>
+            </div>
+        `;
+        chatFeed.appendChild(msgDiv);
+        chatFeed.scrollTop = chatFeed.scrollHeight;
+        return id;
+    }
+
+    function appendAssistantMessage(content, sources = [], isGrounded = false, confidence = 0) {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "message assistant";
+
+        let sourcesHtml = "";
+        if (sources && sources.length > 0) {
+            sourcesHtml = `<div class="sources-container">`;
+            sources.forEach(src => {
+                const previewText = src.preview ? escapeHTML(src.preview.substring(0, 120)) : '';
+                const scoreText = src.relevance_score ? `${Math.round(src.relevance_score * 100)}%` : '';
+                sourcesHtml += `
+                    <div class="source-tag" title="${previewText || src.filename}">
+                        <span>📄 ${escapeHTML(src.filename)}</span>
+                        ${scoreText ? `<span class="source-score-badge">${scoreText}</span>` : ''}
+                    </div>
+                `;
+            });
+            sourcesHtml += `</div>`;
+        }
+
+        msgDiv.innerHTML = `
+            <div class="message-role-label">AI Assistant</div>
+            <div class="message-bubble markdown-body">
+                ${renderMarkdown(content)}
+                ${sourcesHtml}
+            </div>
+        `;
+        chatFeed.appendChild(msgDiv);
+        chatFeed.scrollTop = chatFeed.scrollHeight;
+    }
+
+    // --- Drag & Drop Setup ---
+    const dropOverlay = document.getElementById("drag-drop-overlay");
+    const workspaceWrapper = document.getElementById("workspace-wrapper");
+
+    window.addEventListener("dragenter", (e) => {
+        e.preventDefault();
+        dropOverlay.style.display = "flex";
+    });
+
+    dropOverlay.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        dropOverlay.style.display = "none";
+    });
+
+    dropOverlay.addEventListener("dragover", (e) => {
+        e.preventDefault();
+    });
+
+    dropOverlay.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropOverlay.style.display = "none";
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            processFileUpload(e.dataTransfer.files[0]);
+        }
+    });
+
+    // Initialize on DOM Ready
+    window.addEventListener("DOMContentLoaded", () => {
+        initUserInterface();
+        loadUserSessions();
+        if (sessionId) {
+            loadSessionMessages();
+        }
+    });
+</script>
+{% endblock %}

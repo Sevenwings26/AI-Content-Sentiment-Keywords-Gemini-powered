@@ -10,15 +10,18 @@ class ChatRepository:
         db: Session,
         session_id: Optional[str],
         org_id: str,
-        department_id: str,
-        user_id: str,
+        department_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         title: str = "New Conversation"
     ) -> ChatSession:
         if session_id:
-            session = db.query(ChatSession).filter(
+            query = db.query(ChatSession).filter(
                 ChatSession.id == session_id,
                 ChatSession.org_id == org_id
-            ).first()
+            )
+            if user_id:
+                query = query.filter(ChatSession.user_id == user_id)
+            session = query.first()
             if session:
                 return session
 
@@ -35,18 +38,27 @@ class ChatRepository:
         return new_session
 
     @staticmethod
-    def list_user_sessions(db: Session, org_id: str, user_id: str) -> List[ChatSession]:
+    def list_user_sessions(db: Session, org_id: str, user_id: Optional[str] = None) -> List[ChatSession]:
+        """
+        Returns sessions belonging strictly to the specified authenticated user.
+        Unauthenticated/guest users (user_id=None) do not receive shared cross-session lists.
+        """
+        if not user_id:
+            return []
         return db.query(ChatSession).filter(
             ChatSession.org_id == org_id,
             ChatSession.user_id == user_id
         ).order_by(ChatSession.created_at.desc()).all()
 
     @staticmethod
-    def get_session_by_id(db: Session, session_id: str, org_id: str) -> Optional[ChatSession]:
-        return db.query(ChatSession).filter(
+    def get_session_by_id(db: Session, session_id: str, org_id: str, user_id: Optional[str] = None) -> Optional[ChatSession]:
+        query = db.query(ChatSession).filter(
             ChatSession.id == session_id,
             ChatSession.org_id == org_id
-        ).first()
+        )
+        if user_id:
+            query = query.filter(ChatSession.user_id == user_id)
+        return query.first()
 
     @staticmethod
     def add_message(

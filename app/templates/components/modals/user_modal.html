@@ -1,0 +1,44 @@
+<!-- app/templates/components/modals/user_modal.html -->
+<div id="user-modal" class="modal-backdrop" onclick="if(event.target === this) closeModal('user-modal')">
+    <div class="modal-box">
+        <div class="modal-header">
+            <div>
+                <h3 class="modal-title">Provision New Tenant User</h3>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Assign access clearance and departmental boundaries</p>
+            </div>
+            <button type="button" class="modal-close" onclick="closeModal('user-modal')" aria-label="Close modal">&times;</button>
+        </div>
+        <form id="create-user-form" onsubmit="handleCreateUser(event)">
+            <div class="form-group">
+                <label class="form-label" for="user-name">Full Name</label>
+                <input type="text" id="user-name" class="form-input" placeholder="e.g. Sarah Connor" required autocomplete="name">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="user-email">Work Email</label>
+                <input type="email" id="user-email" class="form-input" placeholder="name@company.com" required autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="user-pwd">Initial Password</label>
+                <input type="password" id="user-pwd" class="form-input" placeholder="Minimum 8 characters" required autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="user-role">Role Clearance Level</label>
+                <select id="user-role" class="form-select" required>
+                    <option value="MEMBER">MEMBER (Standard Workspace Query Access)</option>
+                    <option value="DEPT_ADMIN">DEPT_ADMIN (Department Curator & Ingestion)</option>
+                    <option value="SUPER_ADMIN">SUPER_ADMIN (Tenant Platform Executive)</option>
+                    <option value="AUDITOR">AUDITOR (Compliance & Telemetry Observer)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="user-dept-select">Assigned Department</label>
+                <select id="user-dept-select" class="form-select"></select>
+                <span class="form-hint">Users inherit access to documents tagged with this department.</span>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('user-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="btn-submit-user">Provision User</button>
+            </div>
+        </form>
+    </div>
+</div>

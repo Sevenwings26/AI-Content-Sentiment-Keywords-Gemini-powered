@@ -52,18 +52,38 @@ class VectorStoreService:
         limit: int = 10,
         score_threshold: Optional[float] = None
     ) -> List[Dict[str, Any]]:
-        hits = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=query_vector,
-            query_filter=search_filter,
-            limit=limit,
-            score_threshold=score_threshold
-        )
+        """
+        Executes vector similarity search with backward and forward compatibility
+        supporting modern qdrant-client (>=1.10.0 query_points) and legacy (search).
+        """
+        hits = []
+        try:
+            if hasattr(self.client, "query_points"):
+                response = self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=query_vector,
+                    query_filter=search_filter,
+                    limit=limit,
+                    score_threshold=score_threshold
+                )
+                hits = response.points if hasattr(response, "points") else response
+            elif hasattr(self.client, "search"):
+                hits = self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_vector,
+                    query_filter=search_filter,
+                    limit=limit,
+                    score_threshold=score_threshold
+                )
+        except Exception as e:
+            logger.error(f"Error searching vectors in Qdrant collection '{self.collection_name}': {e}")
+            return []
+
         return [
             {
                 "id": hit.id,
-                "score": hit.score,
-                "payload": hit.payload
+                "score": getattr(hit, "score", 0.0),
+                "payload": getattr(hit, "payload", {}) or {}
             }
             for hit in hits
         ]

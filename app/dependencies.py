@@ -84,7 +84,7 @@ def resolve_effective_user(
         default_org = UserRepository.create_org(db, name="Default Workspace", slug="default-org")
 
     return TokenData(
-        user_id="guest-user",
+        user_id=None,
         org_id=default_org.id,
         department_id=None,
         role="MEMBER",

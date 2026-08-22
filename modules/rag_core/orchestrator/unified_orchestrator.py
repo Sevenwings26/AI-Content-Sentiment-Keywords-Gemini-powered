@@ -1,25 +1,26 @@
 # modules/rag_core/orchestrator/unified_orchestrator.py
 import uuid
 import logging
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
-from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
 
 from core.config import settings
 from modules.auth.domain.tokens import TokenData
 from modules.auth.domain.models import UserRole, Organization, Department
-from modules.governance.domain.models import AssistantPersona, PromptTemplate
+from modules.governance.domain.models import AssistantPersona, PromptTemplate, EnterpriseDocument
 from modules.governance.services.audit_logger import AuditLogger
+from modules.connectors.parsers.factory import ParserFactory
+from modules.connectors.sources.file_connector import FileConnector
 from modules.rag_core.providers.llm import BaseLLMService, LLMFactory
 from modules.rag_core.retrieval.vector_store import VectorStoreService
 from modules.rag_core.retrieval.security_filter import RAGSecurityFilterBuilder
 from modules.rag_core.retrieval.hybrid_retriever import HybridRetriever
 from modules.rag_core.retrieval.reranker import CrossEncoderReranker
-from modules.rag_core.registry.knowledge_registry import KnowledgeRegistry
-from modules.rag_core.guardrails.prompt_engine import PromptEngine
 from modules.rag_core.guardrails.grounding_validator import GroundingValidator
-from modules.connectors.parsers.factory import ParserFactory
-from modules.connectors.sources.file_connector import FileConnector
+from modules.rag_core.guardrails.prompt_engine import PromptEngine
+from modules.rag_core.registry.knowledge_registry import KnowledgeRegistry
+from modules.rag_core.orchestrator.query_planner import QueryPlanner
+from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
 
 logger = logging.getLogger("unified_rag_orchestrator")
 
@@ -49,10 +50,14 @@ class UnifiedRAGOrchestrator:
         persona_id: Optional[str] = None,
         template_id: Optional[str] = None,
         top_k: int = 3,
-        score_threshold: float = 0.35
+        score_threshold: float = 0.35,
+        mode: str = "auto"
     ) -> Tuple[str, List[Dict[str, Any]], bool, float]:
+        # 1. Resolve Organization & Department Names
         org_name = "Enterprise"
         dept_name = "General"
+        has_session_documents = False
+
         if db:
             org = db.query(Organization).filter(Organization.id == user_context.org_id).first()
             if org:
@@ -61,7 +66,22 @@ class UnifiedRAGOrchestrator:
                 dept = db.query(Department).filter(Department.id == user_context.department_id).first()
                 if dept:
                     dept_name = dept.name
+            if session_id:
+                # Check if documents were uploaded to this session or org
+                doc_count = db.query(EnterpriseDocument).filter(
+                    EnterpriseDocument.org_id == user_context.org_id
+                ).count()
+                has_session_documents = (doc_count > 0)
 
+        # 2. Analyze Query Intent & Plan Execution
+        plan = QueryPlanner.analyze_and_plan(
+            query=query,
+            user_context=user_context,
+            has_session_documents=has_session_documents,
+            mode=mode
+        )
+
+        # 3. Resolve System Instruction & Temperature
         system_template = self.grounding_validator.STRICT_SYSTEM_INSTRUCTION
         temperature = 0.2
 
@@ -82,6 +102,37 @@ class UnifiedRAGOrchestrator:
             "org_name": org_name,
             "query": query
         }
+
+        # --- ROUTE A: Conversational / General Knowledge ---
+        if plan.is_conversational_only:
+            logger.info(f"Query routed to General/Conversational handler (intent: {plan.intent_category}).")
+            general_instruction = (
+                f"You are a helpful and knowledgeable AI assistant for {org_name}. "
+                "Answer the user's question clearly, politely, and accurately using your general knowledge."
+            )
+            if persona_id:
+                general_instruction = self.prompt_engine.render_template(system_template, template_vars)
+
+            answer = self.llm.generate_text(
+                query,
+                system_instruction=general_instruction,
+                temperature=max(temperature, 0.5)
+            )
+
+            if db:
+                AuditLogger.log(
+                    db=db,
+                    org_id=user_context.org_id,
+                    user_id=user_context.user_id,
+                    action="GENERAL_CHAT_QUERY",
+                    resource_type="CHAT_QUERY",
+                    resource_id=session_id,
+                    details={"query": query[:200], "intent": plan.intent_category}
+                )
+
+            return answer, [], True, 1.0
+
+        # --- ROUTE B: Document-Grounded RAG Pipeline ---
         system_instruction = self.prompt_engine.render_template(system_template, template_vars)
 
         user_role_enum = UserRole(user_context.role) if hasattr(UserRole, user_context.role) else UserRole.MEMBER
@@ -101,9 +152,23 @@ class UnifiedRAGOrchestrator:
             score_threshold=score_threshold
         )
 
+        # Fallback if no relevant documents found
         if not candidate_chunks:
-            logger.info(f"Query '{query[:50]}' had no chunks above threshold {score_threshold}. Returning out-of-context response.")
-            return self.grounding_validator.get_out_of_context_response(query, org_name)
+            logger.info(f"Query '{query[:50]}' had no chunks above threshold {score_threshold}.")
+            if mode == "rag":
+                # Strict out-of-context response in explicit RAG mode
+                return self.grounding_validator.get_out_of_context_response(query, org_name)
+            else:
+                # In Auto mode, fallback to general LLM response with polite notice
+                general_fallback_instruction = (
+                    f"You are an AI assistant for {org_name}. Answer the user query accurately using general knowledge."
+                )
+                answer = self.llm.generate_text(
+                    query,
+                    system_instruction=general_fallback_instruction,
+                    temperature=0.6
+                )
+                return answer, [], False, 0.0
 
         reranked_chunks = self.reranker.rerank(
             query=query,

@@ -1,6 +1,15 @@
 # app/schemas/governance.py
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
+
+class MetricsResponse(BaseModel):
+    org_name: str
+    org_slug: str
+    total_users: int
+    total_departments: int
+    total_documents: int
+    total_jobs: int
+    total_audits: int
 
 class DepartmentCreatePayload(BaseModel):
     name: str
@@ -10,6 +19,22 @@ class DepartmentResponse(BaseModel):
     id: str
     name: str
     code: str
+    created_at: str
+
+class UserCreateAdminPayload(BaseModel):
+    full_name: str
+    email: str
+    password: str
+    role: str = "MEMBER"
+    department_id: Optional[str] = None
+
+class UserAdminResponse(BaseModel):
+    id: str
+    full_name: Optional[str] = None
+    email: str
+    role: str
+    department_id: Optional[str] = None
+    is_active: bool = True
     created_at: str
 
 class PersonaCreatePayload(BaseModel):
@@ -49,5 +74,5 @@ class AuditLogResponse(BaseModel):
     action: str
     resource_type: str
     resource_id: Optional[str] = None
-    details: Optional[dict] = None
+    details: Optional[Dict[str, Any]] = None
     created_at: str

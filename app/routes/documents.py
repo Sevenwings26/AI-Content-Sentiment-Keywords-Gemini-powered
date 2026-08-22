@@ -18,6 +18,7 @@ from app.schemas.document import DocumentUploadResponse, DocumentItemResponse
 router = APIRouter(tags=["Document Ingestion & Management"])
 
 @router.post("/documents/upload", status_code=status.HTTP_202_ACCEPTED, response_model=DocumentUploadResponse)
+@router.post("/enterprise/documents/upload", status_code=status.HTTP_202_ACCEPTED, response_model=DocumentUploadResponse)
 @router.post("/chat/upload", status_code=status.HTTP_202_ACCEPTED, response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
@@ -104,6 +105,7 @@ async def upload_document(
     )
 
 @router.get("/documents", response_model=List[DocumentItemResponse])
+@router.get("/enterprise/documents", response_model=List[DocumentItemResponse])
 def list_documents(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
