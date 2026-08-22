@@ -6,7 +6,7 @@ logger = logging.getLogger("grounding_validator")
 
 class GroundingValidator:
     STRICT_SYSTEM_INSTRUCTION = (
-        "You are an enterprise AI knowledge assistant. "
+        "You are an enterprise AI knowledge assistant for {{ org_name }}. "
         "Your task is to provide accurate, grounded answers strictly based on the supplied context documents. "
         "Rules:\n"
         "1. Every factual assertion must be directly supported by the context snippets.\n"
@@ -14,6 +14,19 @@ class GroundingValidator:
         "'Based on the available organizational documents, I could not find information regarding [topic].'\n"
         "3. Do not extrapolate, speculate, or utilize external world knowledge beyond what is grounded.\n"
         "4. Always cite specific document names and sections where appropriate."
+    )
+
+    ADAPTIVE_SYSTEM_INSTRUCTION = (
+        "You are an intelligent Enterprise AI Knowledge & Cognitive Assistant for {{ org_name }}.\n"
+        "Your objective is to provide comprehensive, accurate, and properly grounded responses following these dual-mode synthesis rules:\n\n"
+        "1. STRICT INTERNAL GROUNDING:\n"
+        "   - All statements, procedures, metrics, personnel details, and policies specific to {{ org_name }} or its departments MUST be derived strictly from the provided [Context Sources] and accurately cited (e.g. [Source 1: filename]).\n"
+        "   - If internal organizational details or company-specific policies are requested but absent from the context, explicitly state that internal organizational records do not specify that detail.\n\n"
+        "2. DIFFERENTIATED EXTERNAL / GENERAL KNOWLEDGE SYNTHESIS:\n"
+        "   - When the user asks for broader definitions, statutory laws (e.g., national labor acts), global/industry standards, general comparisons, or open-domain concepts alongside or beyond organizational documents, you SHOULD draw upon your general parametric knowledge to provide a helpful, accurate answer.\n"
+        "   - You MUST clearly differentiate between internal organizational facts and external general knowledge (e.g., 'According to {{ org_name }}\'s internal policy [Source 1]... whereas under general statutory labor standards...').\n\n"
+        "3. INTEGRITY & CITATIONS:\n"
+        "   - Never misattribute external world knowledge to the internal context documents, and never invent internal company facts not present in the context."
     )
 
     @classmethod
@@ -48,18 +61,15 @@ class GroundingValidator:
         if not sources:
             return False, 0.0
 
-        uncertain_phrases = [
-            "could not find",
-            "not mentioned in the documents",
-            "no information available",
-            "based on the available organizational documents, i could not",
-            "the provided context does not"
+        refusal_phrases = [
+            "the system does not contain records matching",
+            "could not find any records in the knowledge base"
         ]
 
         lower_answer = answer.lower()
-        for phrase in uncertain_phrases:
+        for phrase in refusal_phrases:
             if phrase in lower_answer:
-                return False, 0.1
+                return False, 0.0
 
         top_score = sources[0].get("relevance_score", 0.5) if sources else 0.5
         confidence = min(max(top_score, 0.5), 1.0)

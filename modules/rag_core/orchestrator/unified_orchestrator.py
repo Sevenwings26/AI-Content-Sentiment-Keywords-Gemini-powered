@@ -53,7 +53,7 @@ class UnifiedRAGOrchestrator:
         score_threshold: float = 0.35,
         mode: str = "auto"
     ) -> Tuple[str, List[Dict[str, Any]], bool, float]:
-        # 1. Resolve Organization & Department Names
+        # 1. Resolve Organization & Department Context
         org_name = "Enterprise"
         dept_name = "General"
         has_session_documents = False
@@ -67,7 +67,6 @@ class UnifiedRAGOrchestrator:
                 if dept:
                     dept_name = dept.name
             if session_id:
-                # Check if documents were uploaded to this session or org
                 doc_count = db.query(EnterpriseDocument).filter(
                     EnterpriseDocument.org_id == user_context.org_id
                 ).count()
@@ -81,9 +80,13 @@ class UnifiedRAGOrchestrator:
             mode=mode
         )
 
-        # 3. Resolve System Instruction & Temperature
-        system_template = self.grounding_validator.STRICT_SYSTEM_INSTRUCTION
-        temperature = 0.2
+        # 3. Select Adaptive vs Strict System Template
+        if mode == "rag":
+            system_template = self.grounding_validator.STRICT_SYSTEM_INSTRUCTION
+            temperature = 0.2
+        else:
+            system_template = self.grounding_validator.ADAPTIVE_SYSTEM_INSTRUCTION
+            temperature = 0.4
 
         if persona_id and db:
             persona = db.query(AssistantPersona).filter(
@@ -132,7 +135,7 @@ class UnifiedRAGOrchestrator:
 
             return answer, [], True, 1.0
 
-        # --- ROUTE B: Document-Grounded RAG Pipeline ---
+        # --- ROUTE B: Adaptive Document-Grounded RAG Pipeline ---
         system_instruction = self.prompt_engine.render_template(system_template, template_vars)
 
         user_role_enum = UserRole(user_context.role) if hasattr(UserRole, user_context.role) else UserRole.MEMBER
@@ -152,20 +155,20 @@ class UnifiedRAGOrchestrator:
             score_threshold=score_threshold
         )
 
-        # Fallback if no relevant documents found
+        # Fallback if no relevant documents found in knowledge base
         if not candidate_chunks:
             logger.info(f"Query '{query[:50]}' had no chunks above threshold {score_threshold}.")
             if mode == "rag":
-                # Strict out-of-context response in explicit RAG mode
                 return self.grounding_validator.get_out_of_context_response(query, org_name)
             else:
-                # In Auto mode, fallback to general LLM response with polite notice
-                general_fallback_instruction = (
-                    f"You are an AI assistant for {org_name}. Answer the user query accurately using general knowledge."
+                fallback_instruction = (
+                    f"You are an AI assistant for {org_name}. "
+                    "No internal company documents matched this specific inquiry. "
+                    "Answer the user query accurately and helpfully using your general knowledge."
                 )
                 answer = self.llm.generate_text(
                     query,
-                    system_instruction=general_fallback_instruction,
+                    system_instruction=fallback_instruction,
                     temperature=0.6
                 )
                 return answer, [], False, 0.0
@@ -178,7 +181,14 @@ class UnifiedRAGOrchestrator:
 
         context_block, sources = self.grounding_validator.format_grounded_context(reranked_chunks)
 
-        user_prompt_str = f"Context:\n{context_block}\n\nUser Question: {query}"
+        user_prompt_str = (
+            f"=== Organizational Context Sources ===\n"
+            f"{context_block}\n\n"
+            f"=== User Inquiry ===\n"
+            f"{query}\n\n"
+            f"Instructions: Provide a clear, synthesized answer. If organizational details are asked, ground them strictly in the sources above with citations. If broader comparisons, global concepts, or statutory knowledge are also requested, draw upon general knowledge while clearly differentiating internal facts from external standards."
+        )
+
         if template_id and db:
             p_template = db.query(PromptTemplate).filter(
                 PromptTemplate.id == template_id,
@@ -295,3 +305,4 @@ class UnifiedRAGOrchestrator:
             ]
         )
         return self.vector_store.delete_by_filter(doc_filter)
+        
