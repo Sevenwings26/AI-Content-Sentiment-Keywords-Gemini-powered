@@ -6,27 +6,22 @@ logger = logging.getLogger("grounding_validator")
 
 class GroundingValidator:
     STRICT_SYSTEM_INSTRUCTION = (
-        "You are an enterprise AI knowledge assistant for {{ org_name }}. "
-        "Your task is to provide accurate, grounded answers strictly based on the supplied context documents. "
-        "Rules:\n"
-        "1. Every factual assertion must be directly supported by the context snippets.\n"
-        "2. If the context does not contain sufficient information to answer the question, explicitly state "
-        "'Based on the available organizational documents, I could not find information regarding [topic].'\n"
-        "3. Do not extrapolate, speculate, or utilize external world knowledge beyond what is grounded.\n"
-        "4. Always cite specific document names and sections where appropriate."
+        "You are an enterprise AI knowledge assistant for {{ org_name }}.\n\n"
+        "RESPONSE GUIDELINES:\n"
+        "- Deliver direct, fluent, professional, and neatly formatted answers (use bold highlights, clean lists, or tables where appropriate).\n"
+        "- Do NOT use repetitive robotic meta-narration (e.g. NEVER say 'According to [Source 1]...', 'Based on the provided documents...', or 'This information is derived from the spreadsheet'). Present the facts directly and naturally.\n"
+        "- All factual assertions regarding {{ org_name }} must be accurately grounded in the supplied context snippets.\n"
+        "- If the context does not contain sufficient details to answer, state clearly and concisely that internal organizational records do not contain this information."
     )
 
     ADAPTIVE_SYSTEM_INSTRUCTION = (
-        "You are an intelligent Enterprise AI Knowledge & Cognitive Assistant for {{ org_name }}.\n"
-        "Your objective is to provide comprehensive, accurate, and properly grounded responses following these dual-mode synthesis rules:\n\n"
-        "1. STRICT INTERNAL GROUNDING:\n"
-        "   - All statements, procedures, metrics, personnel details, and policies specific to {{ org_name }} or its departments MUST be derived strictly from the provided [Context Sources] and accurately cited (e.g. [Source 1: filename]).\n"
-        "   - If internal organizational details or company-specific policies are requested but absent from the context, explicitly state that internal organizational records do not specify that detail.\n\n"
-        "2. DIFFERENTIATED EXTERNAL / GENERAL KNOWLEDGE SYNTHESIS:\n"
-        "   - When the user asks for broader definitions, statutory laws (e.g., national labor acts), global/industry standards, general comparisons, or open-domain concepts alongside or beyond organizational documents, you SHOULD draw upon your general parametric knowledge to provide a helpful, accurate answer.\n"
-        "   - You MUST clearly differentiate between internal organizational facts and external general knowledge (e.g., 'According to {{ org_name }}\'s internal policy [Source 1]... whereas under general statutory labor standards...').\n\n"
-        "3. INTEGRITY & CITATIONS:\n"
-        "   - Never misattribute external world knowledge to the internal context documents, and never invent internal company facts not present in the context."
+        "You are an intelligent Enterprise AI Knowledge & Cognitive Assistant for {{ org_name }}.\n\n"
+        "RESPONSE GUIDELINES:\n"
+        "- Deliver direct, fluent, professional, and well-structured answers (use bold text, bullet points, or tables where appropriate).\n"
+        "- Do NOT use robotic meta-commentary or filler introductions (e.g. avoid 'According to [Source 1]...', 'Based on the provided documents...', 'This information is derived from...'). State the facts authoritatively and naturally.\n"
+        "- For organization-specific inquiries, ground details accurately in the provided [Context Sources].\n"
+        "- When the user asks for broader definitions, national/statutory laws (e.g., Nigerian labor standards), global industry benchmarks, or general comparisons alongside internal records, seamlessly synthesize general knowledge while maintaining a clear distinction between internal company rules and general external standards.\n"
+        "- If internal organizational facts are requested but absent from the context, state concisely that internal company records do not specify those details."
     )
 
     @classmethod
@@ -35,15 +30,15 @@ class GroundingValidator:
             return "", []
 
         context_blocks = []
-        sources = []
+        raw_sources = []
 
         for idx, chunk in enumerate(retrieved_chunks, 1):
             filename = chunk.get("filename", "Unknown Document")
             content = chunk.get("content", "").strip()
             score = chunk.get("rerank_score", chunk.get("vector_score", 0.0))
 
-            context_blocks.append(f"[Source {idx}: {filename}]\n{content}\n")
-            sources.append({
+            context_blocks.append(f"[Document: {filename} | Excerpt {idx}]\n{content}\n")
+            raw_sources.append({
                 "source_id": str(idx),
                 "filename": filename,
                 "document_id": chunk.get("document_id"),
@@ -54,7 +49,36 @@ class GroundingValidator:
                 "source_type": chunk.get("source_type", "file")
             })
 
-        return "\n".join(context_blocks), sources
+        return "\n".join(context_blocks), raw_sources
+
+    @classmethod
+    def deduplicate_sources(cls, raw_sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Deduplicates sources by document / filename, retaining the maximum relevance score
+        and counting aggregated matching chunks.
+        """
+        deduped: Dict[str, Dict[str, Any]] = {}
+        for s in raw_sources:
+            key = s.get("document_id") or s.get("filename")
+            if key not in deduped:
+                deduped[key] = {
+                    "source_id": s.get("source_id"),
+                    "filename": s.get("filename"),
+                    "document_id": s.get("document_id"),
+                    "department_id": s.get("department_id"),
+                    "access_level": s.get("access_level"),
+                    "preview": s.get("preview"),
+                    "relevance_score": s.get("relevance_score", 0.0),
+                    "source_type": s.get("source_type", "file"),
+                    "chunk_count": 1
+                }
+            else:
+                if s.get("relevance_score", 0.0) > deduped[key]["relevance_score"]:
+                    deduped[key]["relevance_score"] = s["relevance_score"]
+                deduped[key]["chunk_count"] += 1
+
+        # Sort deduplicated sources by highest relevance score descending
+        return sorted(deduped.values(), key=lambda x: x["relevance_score"], reverse=True)
 
     @classmethod
     def validate_grounding(cls, answer: str, sources: List[Dict[str, Any]]) -> Tuple[bool, float]:

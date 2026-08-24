@@ -74,3 +74,4 @@ celery
 redis
 boto3
 email-validator
+openpyxl>=3.1.2

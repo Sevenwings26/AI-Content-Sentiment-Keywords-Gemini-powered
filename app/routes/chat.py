@@ -65,7 +65,8 @@ def execute_chat_query(
             access_level=s.get("access_level"),
             preview=s["preview"],
             relevance_score=s["relevance_score"],
-            source_type=s.get("source_type", "file")
+            source_type=s.get("source_type", "file"),
+            chunk_count=s.get("chunk_count", 1)
         )
         for s in sources
     ]

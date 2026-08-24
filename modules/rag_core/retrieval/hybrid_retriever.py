@@ -46,3 +46,4 @@ class HybridRetriever:
 
         logger.info(f"HybridRetriever retrieved {len(candidates)} candidate chunks above score {threshold}")
         return candidates
+        

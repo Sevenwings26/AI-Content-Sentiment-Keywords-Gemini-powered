@@ -5,6 +5,9 @@ Using the Provider Pattern (also known as the Strategy Pattern) to which between
 import os
 from abc import ABC, abstractmethod
 from typing import Optional, List
+from google.genai import types
+from google import genai
+
 
 # Define the Abstract Base Class (Interface)
 class BaseLLMService(ABC):
@@ -29,64 +32,62 @@ class BaseLLMService(ABC):
 
 
 # Implementation 1: Gemini Provider (New Google GenAI SDK)
-try:
-    from google import genai
-    from google.genai import types
-    
-    class GeminiService(BaseLLMService):
-        def __init__(self, api_key: str, model_name: str = "gemini-2.5-flash", embedding_model: str = "text-embedding-004"):
-            self.client = genai.Client(api_key=api_key)
-            self.model_name = model_name
-            self.embedding_model = embedding_model
+# try:
 
-        def generate_text(self, prompt: str, system_instruction: Optional[str] = None, **kwargs) -> str:
-            config = types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=kwargs.get("temperature", 0.2),
-                max_output_tokens=kwargs.get("max_tokens", None)
-            )
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=config
-            )
-            return response.text.strip()
+class GeminiService(BaseLLMService):
+    def __init__(self, api_key: str, model_name: str = "gemini-2.5-flash", embedding_model: str = "text-embedding-004"):
+        self.client = genai.Client(api_key=api_key)
+        self.model_name = model_name
+        self.embedding_model = embedding_model
 
-        def get_embeddings(self, text: str) -> List[float]:
-            response = self.client.models.embed_content(
-                model=self.embedding_model,
-                contents=text
-            )
-            return response.embeddings[0].values
+    def generate_text(self, prompt: str, system_instruction: Optional[str] = None, **kwargs) -> str:
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            temperature=kwargs.get("temperature", 0.2),
+            max_output_tokens=kwargs.get("max_tokens", None)
+        )
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config=config
+        )
+        return response.text.strip()
+
+    def get_embeddings(self, text: str) -> List[float]:
+        response = self.client.models.embed_content(
+            model=self.embedding_model,
+            contents=text
+        )
+        return response.embeddings[0].values
             
-except ImportError:
-    # Fallback to Legacy google-generativeai SDK if the new SDK is not installed yet
-    import google.generativeai as genai
-    class GeminiService(BaseLLMService):
-        def __init__(self, api_key: str, model_name: str = "gemini-2.5-flash", embedding_model: str = "models/text-embedding-004"):
-            genai.configure(api_key=api_key)
-            self.model_name = model_name
-            self.embedding_model = embedding_model
+# except ImportError:
+#     # Fallback to Legacy google-generativeai SDK if the new SDK is not installed yet
+#     import google.generativeai as genai
+#     class GeminiService(BaseLLMService):
+#         def __init__(self, api_key: str, model_name: str = "gemini-2.5-flash", embedding_model: str = "models/text-embedding-004"):
+#             genai.configure(api_key=api_key)
+#             self.model_name = model_name
+#             self.embedding_model = embedding_model
 
-        def generate_text(self, prompt: str, system_instruction: Optional[str] = None, **kwargs) -> str:
-            model = genai.GenerativeModel(
-                model_name=self.model_name,
-                system_instruction=system_instruction
-            )
-            response = model.generate_content(
-                prompt,
-                generation_config={"temperature": kwargs.get("temperature", 0.2)}
-            )
-            return response.text.strip()
+#         def generate_text(self, prompt: str, system_instruction: Optional[str] = None, **kwargs) -> str:
+#             model = genai.GenerativeModel(
+#                 model_name=self.model_name,
+#                 system_instruction=system_instruction
+#             )
+#             response = model.generate_content(
+#                 prompt,
+#                 generation_config={"temperature": kwargs.get("temperature", 0.2)}
+#             )
+#             return response.text.strip()
 
-        # CORRECTED LEGACY EMBEDDING CODE:
-        def get_embeddings(self, text: str) -> List[float]:
-            result = genai.embed_content(
-                model=self.embedding_model,
-                content=text,
-                task_type="retrieval_document"
-            )
-            return result['embedding']
+#         # CORRECTED LEGACY EMBEDDING CODE:
+#         def get_embeddings(self, text: str) -> List[float]:
+#             result = genai.embed_content(
+#                 model=self.embedding_model,
+#                 content=text,
+#                 task_type="retrieval_document"
+#             )
+#             return result['embedding']
 
 # Implementation 2: OpenAI-Compatible Provider (vLLM, Ollama, OpenAI)
 from openai import OpenAI
@@ -186,3 +187,5 @@ class LLMFactory:
 
         else:
             raise ValueError(f"Unsupported LLM provider type: {provider_type}")
+
+

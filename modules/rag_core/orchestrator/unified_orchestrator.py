@@ -179,14 +179,15 @@ class UnifiedRAGOrchestrator:
             top_n=top_k
         )
 
-        context_block, sources = self.grounding_validator.format_grounded_context(reranked_chunks)
+        context_block, raw_sources = self.grounding_validator.format_grounded_context(reranked_chunks)
+        sources = self.grounding_validator.deduplicate_sources(raw_sources)
 
         user_prompt_str = (
-            f"=== Organizational Context Sources ===\n"
-            f"{context_block}\n\n"
+            f"=== Authorized Internal Knowledge Context ===\n"
+            f"{context_block}\n"
             f"=== User Inquiry ===\n"
             f"{query}\n\n"
-            f"Instructions: Provide a clear, synthesized answer. If organizational details are asked, ground them strictly in the sources above with citations. If broader comparisons, global concepts, or statutory knowledge are also requested, draw upon general knowledge while clearly differentiating internal facts from external standards."
+            f"Directives: Provide a direct, fluent, and well-structured answer. Present information clearly and naturally without robotic meta-openings (e.g. avoid 'According to Source 1...' or 'Based on the spreadsheet...')."
         )
 
         if template_id and db:
@@ -232,6 +233,43 @@ class UnifiedRAGOrchestrator:
         return parser.parse(file_bytes)
 
     def chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 100) -> List[str]:
+        """
+        Intelligent chunker supporting tabular structured datasets (Excel/CSV)
+        as well as standard unstructured documents (PDF/DOCX/TXT).
+        """
+        if not text or not text.strip():
+            return []
+
+        # 1. Tabular / Spreadsheet Structured Chunking
+        if "### [Spreadsheet Table" in text or "### [Tabular Document" in text:
+            chunks = []
+            sections = text.split("### [")
+            for section in sections:
+                if not section.strip():
+                    continue
+                section_text = "### [" + section.strip() if not section.startswith("### [") else section.strip()
+                lines = section_text.split("\n")
+
+                header_lines = []
+                row_lines = []
+                for line in lines:
+                    if line.startswith("### [") or line.startswith("Columns:"):
+                        header_lines.append(line)
+                    elif line.strip():
+                        row_lines.append(line)
+
+                header_context = "\n".join(header_lines) + "\n\n" if header_lines else ""
+
+                # Bundle 6 rows per chunk to preserve row completeness and density
+                batch_size = 6
+                for i in range(0, len(row_lines), batch_size):
+                    batch = row_lines[i:i + batch_size]
+                    chunk_str = header_context + "\n".join(batch)
+                    chunks.append(chunk_str)
+
+            return chunks if chunks else [text]
+
+        # 2. Standard Document Chunking (Paragraph/Word Split)
         chunks = []
         words = text.split()
         step = max(chunk_size - overlap, 1)

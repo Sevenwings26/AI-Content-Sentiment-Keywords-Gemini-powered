@@ -1,11 +1,11 @@
 # modules/connectors/parsers/docx_parser.py
 import io
+import docx
 from modules.connectors.parsers.base import BaseParser
 
 class DocxParser(BaseParser):
     def parse(self, content_bytes: bytes) -> str:
         try:
-            import docx
             doc = docx.Document(io.BytesIO(content_bytes))
             full_text = []
             for para in doc.paragraphs:

@@ -26,6 +26,7 @@ class SourceCitation(BaseModel):
     preview: str
     relevance_score: float
     source_type: Optional[str] = "file"
+    chunk_count: Optional[int] = 1
 
 class ChatQueryResponse(BaseModel):
     status: str = "success"

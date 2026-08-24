@@ -20,3 +20,4 @@ class QueryPlan:
     target_scopes: List[str]
     sub_queries: List[str]
     intent_category: str
+

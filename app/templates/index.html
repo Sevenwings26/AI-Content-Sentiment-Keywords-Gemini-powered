@@ -961,9 +961,11 @@
             sources.forEach(src => {
                 const previewText = src.preview ? escapeHTML(src.preview.substring(0, 120)) : '';
                 const scoreText = src.relevance_score ? `${Math.round(src.relevance_score * 100)}%` : '';
+                const chunkInfo = (src.chunk_count && src.chunk_count > 1) ? `<span class="source-chunk-count" style="opacity: 0.75; font-size: 10px; margin-left: 2px;">(${src.chunk_count} excerpts)</span>` : '';
                 sourcesHtml += `
                     <div class="source-tag" title="${previewText || src.filename}">
                         <span>📄 ${escapeHTML(src.filename)}</span>
+                        ${chunkInfo}
                         ${scoreText ? `<span class="source-score-badge">${scoreText}</span>` : ''}
                     </div>
                 `;
