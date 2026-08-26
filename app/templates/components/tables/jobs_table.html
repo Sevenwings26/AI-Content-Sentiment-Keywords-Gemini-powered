@@ -3,30 +3,43 @@
     <div class="table-container">
         <div class="flex items-center justify-between" style="padding: 20px 24px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 12px;">
             <div>
-                <h2 style="font-size: 16px; font-weight: 600;">Data Source Connector Sync Jobs</h2>
-                <p class="text-sm text-secondary" style="margin-top: 2px;">Automated background connectors syncing documents from S3, Drive, Confluence, and DBs</p>
+                <h2 style="font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <span>⚙️ Enterprise Data Source Connectors</span>
+                    <span id="jobs-count-badge" class="badge badge-neutral">0 Active</span>
+                </h2>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Automated ingestion pipelines syncing databases, cloud object stores, and enterprise wikis</p>
             </div>
-            <button type="button" class="btn btn-primary btn-sm" onclick="openModal('job-modal')">
-                <span>+ Create Sync Job</span>
-            </button>
+            <div class="flex items-center gap-3">
+                <!-- Source Category Filter Pills -->
+                <div class="filter-pills" style="display: flex; gap: 6px; background: var(--bg-surface-2); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                    <button type="button" class="pill-btn active" onclick="filterJobsCategory('ALL', this)">All</button>
+                    <button type="button" class="pill-btn" onclick="filterJobsCategory('Databases', this)">Databases</button>
+                    <button type="button" class="pill-btn" onclick="filterJobsCategory('Cloud & File Storage', this)">Cloud Storage</button>
+                    <button type="button" class="pill-btn" onclick="filterJobsCategory('Wikis & Productivity', this)">Wikis</button>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" onclick="openJobModal()">
+                    <span>+ Connect New Source</span>
+                </button>
+            </div>
         </div>
         <div class="table-responsive">
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Job Name</th>
-                        <th>Source Connector</th>
+                        <th>Job / Pipeline Name</th>
+                        <th>Connector Source</th>
                         <th>Access Clearance</th>
                         <th>Job Status</th>
                         <th>Processed Docs</th>
+                        <th>Last Synced</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="jobs-table-body">
                     <tr>
-                        <td colspan="6" class="text-center text-muted" style="padding: 36px 20px;">
+                        <td colspan="7" class="text-center text-muted" style="padding: 36px 20px;">
                             <div class="spinner" style="margin-bottom: 8px;"></div>
-                            <div>Loading connector sync jobs...</div>
+                            <div>Loading enterprise connector jobs...</div>
                         </td>
                     </tr>
                 </tbody>
@@ -34,3 +47,26 @@
         </div>
     </div>
 </div>
+
+<style>
+.pill-btn {
+    background: transparent;
+    border: none;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.pill-btn:hover {
+    color: var(--text-primary);
+}
+.pill-btn.active {
+    background: var(--bg-surface-1);
+    color: var(--color-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    font-weight: 600;
+}
+</style>

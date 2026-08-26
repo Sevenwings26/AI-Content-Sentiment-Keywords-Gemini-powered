@@ -10,6 +10,8 @@ from modules.governance.domain.models import (
 from modules.governance.repositories.document_repository import DocumentRepository
 from modules.rag_core.providers.llm import LLMFactory
 from modules.rag_core.orchestrator.unified_orchestrator import UnifiedRAGOrchestrator
+from modules.connectors.registry import ConnectorRegistry
+from core.crypto import decrypt_connection_config
 
 logger = logging.getLogger("ingestion_worker")
 
@@ -65,7 +67,10 @@ def async_ingest_document_task(
 
 @celery_app.task(name="async_execute_ingestion_job_task")
 def async_execute_ingestion_job_task(job_id: str):
-    """Asynchronously executes an admin-configured data source ingestion job (S3, SQL DB, etc.)."""
+    """
+    Asynchronously executes any admin-configured data source ingestion job
+    (PostgreSQL, MySQL, Oracle, MSSQL, S3, Google Drive, SharePoint, Confluence, Notion).
+    """
     db, orchestrator = get_services()
     job = db.query(IngestionJob).filter(IngestionJob.id == job_id).first()
     if not job:
@@ -76,15 +81,11 @@ def async_execute_ingestion_job_task(job_id: str):
         job.status = IngestionJobStatus.RUNNING
         db.commit()
 
-        connector = None
-        if job.source_type == "s3":
-            from modules.connectors.sources.s3_connector import S3Connector
-            connector = S3Connector(job.connection_config)
-        elif job.source_type == "relational_db":
-            from modules.connectors.sources.db_connector import RelationalDBConnector
-            connector = RelationalDBConnector(job.connection_config)
-        else:
-            raise ValueError(f"Unsupported connector source_type: {job.source_type}")
+        # Decrypt connection config at runtime
+        decrypted_config = decrypt_connection_config(job.connection_config)
+
+        # Instantiate connector dynamically via ConnectorRegistry
+        connector = ConnectorRegistry.get_connector(job.source_type, decrypted_config)
 
         processed_count = 0
         for raw_doc in connector.fetch_documents():
@@ -105,10 +106,10 @@ def async_execute_ingestion_job_task(job_id: str):
         job.last_run_at = datetime.utcnow()
         db.commit()
 
-        logger.info(f"[ASYNC WORKER JOB] Completed job {job_id} - {processed_count} docs processed")
+        logger.info(f"[ASYNC WORKER JOB] Completed job {job_id} ({job.name}) - {processed_count} docs processed")
         return {"status": "success", "job_id": job_id, "processed_count": processed_count}
     except Exception as e:
-        logger.error(f"[ASYNC WORKER JOB FAILURE] Job {job_id} failed: {e}")
+        logger.error(f"[ASYNC WORKER JOB FAILURE] Job {job_id} ({job.name}) failed: {e}")
         job.status = IngestionJobStatus.FAILED
         job.error_message = str(e)
         db.commit()

@@ -477,33 +477,12 @@
             }
 
             // 7. Fetch Connector Jobs
+            await loadConnectorSchemas();
             const jobs = await fetchAPI('/enterprise/jobs');
-            if (jobs) {
-                const jobsTable = document.getElementById('jobs-table-body');
-                if (jobs.length === 0) {
-                    jobsTable.innerHTML = renderEmptyState('⚙️', 'No connector sync jobs configured', 'Set up automated background ingestion pipelines from S3 buckets, Drive folders, or databases.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'job-modal\')">+ Create Sync Job</button>');
-                } else {
-                    let rowsHtml = '';
-                    jobs.forEach(j => {
-                        rowsHtml += `
-                            <tr>
-                                <td><strong>${escapeHTML(j.name)}</strong></td>
-                                <td><code>${escapeHTML(j.source_type)}</code></td>
-                                <td><span class="badge badge-acl-department">${escapeHTML(j.access_level)}</span></td>
-                                <td><span class="badge badge-acl-public">${escapeHTML(j.status)}</span></td>
-                                <td><strong>${j.documents_processed_count}</strong> files</td>
-                                <td>
-                                    <button type="button" class="btn btn-outline btn-sm" onclick="handleTriggerJob('${j.id}', '${escapeHTML(j.name)}')">
-                                        ▶ Trigger
-                                    </button>
-                                </td>
-                            </tr>
-                        `;
-                    });
-                    jobsTable.innerHTML = rowsHtml;
-                }
+            if (jobs && Array.isArray(jobs)) {
+                cachedJobsList = jobs;
+                renderJobsTable('ALL');
             }
-
             if (showToast) {
                 Toast.success('Dashboard Synchronized', 'All governance telemetry and table data refreshed.');
             }
@@ -707,41 +686,332 @@
         }
     }
 
+    
+    // =========================================================
+    // Dynamic Schema-Driven Connector Governance & Testing
+    // =========================================================
+    let allConnectorSchemas = [];
+    let currentSelectedConnector = 'POSTGRES_DB';
+    let cachedJobsList = [];
+
+    async function loadConnectorSchemas() {
+        if (allConnectorSchemas.length === 0) {
+            const schemas = await fetchAPI('/enterprise/connectors/schemas');
+            if (schemas && Array.isArray(schemas)) {
+                allConnectorSchemas = schemas;
+            }
+        }
+        return allConnectorSchemas;
+    }
+
+    async function openJobModal() {
+        await loadConnectorSchemas();
+        renderConnectorCards();
+        selectConnectorType(currentSelectedConnector || 'POSTGRES_DB');
+        document.getElementById('connection-test-result').style.display = 'none';
+        openModal('job-modal');
+    }
+
+    function renderConnectorCards() {
+        const grid = document.getElementById('connector-cards-grid');
+        if (!grid || allConnectorSchemas.length === 0) return;
+
+        let cardsHtml = '';
+        allConnectorSchemas.forEach(c => {
+            const isSelected = (c.source_type === currentSelectedConnector) ? 'selected' : '';
+            cardsHtml += `
+                <div class="connector-card ${isSelected}" id="card-${c.source_type}" onclick="selectConnectorType('${c.source_type}')">
+                    <div class="connector-card-icon">${c.icon}</div>
+                    <div style="overflow: hidden;">
+                        <div class="connector-card-name" title="${escapeHTML(c.name)}">${escapeHTML(c.name)}</div>
+                        <div class="connector-card-cat">${escapeHTML(c.category)}</div>
+                    </div>
+                </div>
+            `;
+        });
+        grid.innerHTML = cardsHtml;
+    }
+
+    function selectConnectorType(sourceType) {
+        currentSelectedConnector = sourceType;
+        document.querySelectorAll('.connector-card').forEach(el => el.classList.remove('selected'));
+        const activeCard = document.getElementById(`card-${sourceType}`);
+        if (activeCard) activeCard.classList.add('selected');
+
+        const schema = allConnectorSchemas.find(s => s.source_type === sourceType);
+        if (!schema) return;
+
+        document.getElementById('selected-connector-badge').innerHTML = `${schema.icon} ${escapeHTML(schema.name)}`;
+        document.getElementById('connector-doc-hint').textContent = schema.description;
+
+        renderDynamicFields(schema);
+        document.getElementById('connection-test-result').style.display = 'none';
+    }
+
+    function renderDynamicFields(schema) {
+        const container = document.getElementById('dynamic-fields-container');
+        if (!container) return;
+
+        let html = '';
+        schema.fields.forEach(f => {
+            const isFullWidth = (f.field_type === 'textarea') ? 'grid-column: span 2;' : '';
+            const requiredAttr = f.required ? 'required' : '';
+            const fieldId = `cfg-field-${f.name}`;
+
+            if (f.field_type === 'textarea') {
+                html += `
+                    <div class="form-group" style="${isFullWidth} margin-bottom: 0;">
+                        <label class="form-label" for="${fieldId}">
+                            ${escapeHTML(f.title)} ${f.required ? '<span style="color:var(--color-danger)">*</span>' : ''}
+                        </label>
+                        <textarea id="${fieldId}" data-field-name="${f.name}" class="form-textarea" rows="2"
+                            style="font-family: var(--font-mono); font-size: 12px;"
+                            placeholder="${escapeHTML(f.placeholder || '')}" ${requiredAttr}>${escapeHTML(f.default_value || '')}</textarea>
+                        ${f.description ? `<span class="text-xs text-muted" style="margin-top:2px; display:block;">${escapeHTML(f.description)}</span>` : ''}
+                    </div>
+                `;
+            } else if (f.field_type === 'password' || f.is_secret) {
+                html += `
+                    <div class="form-group" style="${isFullWidth} margin-bottom: 0;">
+                        <label class="form-label" for="${fieldId}">
+                            ${escapeHTML(f.title)} ${f.required ? '<span style="color:var(--color-danger)">*</span>' : ''}
+                        </label>
+                        <div class="password-toggle-wrapper">
+                            <input type="password" id="${fieldId}" data-field-name="${f.name}" class="form-input"
+                                placeholder="${escapeHTML(f.placeholder || '')}" ${requiredAttr}>
+                            <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('${fieldId}')" title="Toggle visibility">👁️</button>
+                        </div>
+                    </div>
+                `;
+            } else if (f.field_type === 'number') {
+                html += `
+                    <div class="form-group" style="${isFullWidth} margin-bottom: 0;">
+                        <label class="form-label" for="${fieldId}">
+                            ${escapeHTML(f.title)} ${f.required ? '<span style="color:var(--color-danger)">*</span>' : ''}
+                        </label>
+                        <input type="number" id="${fieldId}" data-field-name="${f.name}" class="form-input"
+                            value="${f.default_value !== null && f.default_value !== undefined ? f.default_value : ''}"
+                            placeholder="${escapeHTML(f.placeholder || '')}" ${requiredAttr}>
+                    </div>
+                `;
+            } else if (f.field_type === 'boolean') {
+                html += `
+                    <div class="form-group" style="${isFullWidth} margin-bottom: 0; display: flex; align-items: center; gap: 8px; margin-top: 24px;">
+                        <input type="checkbox" id="${fieldId}" data-field-name="${f.name}" ${f.default_value ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
+                        <label class="form-label" for="${fieldId}" style="margin-bottom: 0; cursor: pointer;">
+                            ${escapeHTML(f.title)}
+                        </label>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="form-group" style="${isFullWidth} margin-bottom: 0;">
+                        <label class="form-label" for="${fieldId}">
+                            ${escapeHTML(f.title)} ${f.required ? '<span style="color:var(--color-danger)">*</span>' : ''}
+                        </label>
+                        <input type="text" id="${fieldId}" data-field-name="${f.name}" class="form-input"
+                            value="${escapeHTML(f.default_value || '')}"
+                            placeholder="${escapeHTML(f.placeholder || '')}" ${requiredAttr}>
+                    </div>
+                `;
+            }
+        });
+        container.innerHTML = html;
+    }
+
+    function togglePasswordVisibility(fieldId) {
+        const input = document.getElementById(fieldId);
+        if (input) {
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+    }
+
+    function collectDynamicConfig() {
+        const schema = allConnectorSchemas.find(s => s.source_type === currentSelectedConnector);
+        if (!schema) return {};
+
+        const config = {};
+        schema.fields.forEach(f => {
+            const input = document.getElementById(`cfg-field-${f.name}`);
+            if (input) {
+                if (f.field_type === 'boolean') {
+                    config[f.name] = input.checked;
+                } else if (f.field_type === 'number') {
+                    config[f.name] = input.value ? Number(input.value) : f.default_value;
+                } else {
+                    config[f.name] = input.value.trim();
+                }
+            }
+        });
+        return config;
+    }
+
+    async function handleTestConnection() {
+        const testBtn = document.getElementById('btn-test-connection');
+        const resultBox = document.getElementById('connection-test-result');
+        const config = collectDynamicConfig();
+
+        testBtn.disabled = true;
+        testBtn.innerHTML = `<span class="spinner" style="width:14px; height:14px; border-width:2px;"></span> Testing Connection...`;
+        resultBox.style.display = 'none';
+
+        try {
+            const res = await fetchAPI('/enterprise/connectors/test-connection', {
+                method: 'POST',
+                body: {
+                    source_type: currentSelectedConnector,
+                    connection_config: config
+                }
+            });
+
+            if (res.success) {
+                resultBox.style.display = 'block';
+                resultBox.style.background = 'rgba(16, 185, 129, 0.12)';
+                resultBox.style.border = '1px solid #10b981';
+                resultBox.style.color = '#065f46';
+                resultBox.innerHTML = `<strong>✓ Connection Verified (${res.latency_ms}ms)</strong>: ${escapeHTML(res.message)}`;
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: `Connection Successful (${res.latency_ms}ms)`,
+                        text: res.message,
+                        timer: 4000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Toast.success('Connection Verified', `${res.message} (${res.latency_ms}ms)`);
+                }
+            } else {
+                resultBox.style.display = 'block';
+                resultBox.style.background = 'rgba(239, 68, 68, 0.12)';
+                resultBox.style.border = '1px solid #ef4444';
+                resultBox.style.color = '#991b1b';
+                resultBox.innerHTML = `<strong>✕ Connection Failed (${res.latency_ms}ms)</strong>: ${escapeHTML(res.message)}`;
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Connection Test Failed',
+                        text: res.message,
+                        confirmButtonColor: '#2563eb'
+                    });
+                } else {
+                    Toast.error('Connection Failed', res.message);
+                }
+            }
+        } catch (err) {
+            resultBox.style.display = 'block';
+            resultBox.style.background = 'rgba(239, 68, 68, 0.12)';
+            resultBox.style.border = '1px solid #ef4444';
+            resultBox.style.color = '#991b1b';
+            resultBox.innerHTML = `<strong>✕ Request Error</strong>: ${escapeHTML(err.message)}`;
+            Toast.error('Test Failed', err.message);
+        } finally {
+            testBtn.disabled = false;
+            testBtn.innerHTML = `<span>⚡ Test Connection</span>`;
+        }
+    }
+
     async function handleCreateJob(e) {
         e.preventDefault();
         const btn = document.getElementById('btn-submit-job');
         btn.disabled = true;
+        btn.innerHTML = `<span class="spinner" style="width:14px; height:14px; border-width:2px;"></span> Registering Pipeline...`;
 
-        let parsedConfig = {};
-        try {
-            parsedConfig = JSON.parse(document.getElementById('job-config').value.trim());
-        } catch (err) {
-            Toast.error('Invalid JSON', 'Connection configuration must be a valid JSON object.');
-            btn.disabled = false;
-            return;
-        }
+        const config = collectDynamicConfig();
 
         try {
             await fetchAPI('/enterprise/jobs/create', {
                 method: 'POST',
                 body: {
                     name: document.getElementById('job-name').value.trim(),
-                    source_type: document.getElementById('job-source-type').value,
+                    source_type: currentSelectedConnector,
                     access_level: document.getElementById('job-acl').value,
                     target_department_id: document.getElementById('job-dept-select').value || null,
-                    connection_config: parsedConfig
+                    cron_schedule: document.getElementById('job-cron').value.trim() || null,
+                    connection_config: config
                 }
             });
             closeModal('job-modal');
             document.getElementById('create-job-form').reset();
-            Toast.success('Job Registered', 'Data source connector job created.');
+            Toast.success('Pipeline Registered', `Data source connector "${currentSelectedConnector}" configured successfully.`);
             refreshDashboardData();
         } catch (err) {
-            Toast.error('Job Creation Failed', err.message);
+            Toast.error('Registration Failed', err.message);
         } finally {
             btn.disabled = false;
-            btn.textContent = 'Create Job';
+            btn.textContent = 'Save & Register Job';
         }
+    }
+
+    function filterJobsCategory(category, btnElement) {
+        document.querySelectorAll('.filter-pills .pill-btn').forEach(b => b.classList.remove('active'));
+        if (btnElement) btnElement.classList.add('active');
+
+        renderJobsTable(category);
+    }
+
+    function renderJobsTable(selectedCategory = 'ALL') {
+        const jobsTable = document.getElementById('jobs-table-body');
+        if (!jobsTable) return;
+
+        let filteredJobs = cachedJobsList;
+        if (selectedCategory !== 'ALL') {
+            filteredJobs = cachedJobsList.filter(j => {
+                const schema = allConnectorSchemas.find(s => s.source_type === j.source_type);
+                return schema && schema.category === selectedCategory;
+            });
+        }
+
+        const badge = document.getElementById('jobs-count-badge');
+        if (badge) badge.textContent = `${filteredJobs.length} Active`;
+
+        if (filteredJobs.length === 0) {
+            jobsTable.innerHTML = renderEmptyState('⚙️', 'No matching connector pipelines', 'Configure automated ingestion from relational databases, S3, Google Drive, or wikis.', '<button type="button" class="btn btn-primary btn-sm" onclick="openJobModal()">+ Connect New Source</button>');
+            return;
+        }
+
+        let rowsHtml = '';
+        filteredJobs.forEach(j => {
+            const schema = allConnectorSchemas.find(s => s.source_type === j.source_type);
+            const icon = schema ? schema.icon : '🔌';
+            const cat = schema ? schema.category : 'External';
+
+            let statusBadge = 'badge-neutral';
+            if (j.status === 'COMPLETED') statusBadge = 'badge-success';
+            else if (j.status === 'RUNNING') statusBadge = 'badge-warning';
+            else if (j.status === 'FAILED') statusBadge = 'badge-danger';
+
+            const lastRunStr = j.last_run_at ? new Date(j.last_run_at).toLocaleString() : '<span class="text-muted">Never</span>';
+
+            rowsHtml += `
+                <tr>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text-primary);">${escapeHTML(j.name)}</div>
+                        <div class="text-xs text-muted">${escapeHTML(cat)}</div>
+                    </td>
+                    <td>
+                        <span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 500;">
+                            <span>${icon}</span>
+                            <code>${escapeHTML(j.source_type)}</code>
+                        </span>
+                    </td>
+                    <td><span class="badge badge-acl-${(j.access_level || 'department').toLowerCase()}">${escapeHTML(j.access_level)}</span></td>
+                    <td><span class="badge ${statusBadge}">${escapeHTML(j.status)}</span></td>
+                    <td><strong>${j.documents_processed_count}</strong> docs</td>
+                    <td><span class="text-secondary text-xs">${lastRunStr}</span></td>
+                    <td>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="handleTriggerJob('${j.id}', '${escapeHTML(j.name)}')">
+                            ▶ Sync Now
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        jobsTable.innerHTML = rowsHtml;
     }
 
     async function handleTriggerJob(jobId, jobName) {

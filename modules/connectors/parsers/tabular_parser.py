@@ -4,7 +4,6 @@ import csv
 import logging
 from typing import List, Optional
 from modules.connectors.parsers.base import BaseParser
-import openpyxl
 
 logger = logging.getLogger("tabular_parser")
 
@@ -33,6 +32,7 @@ class TabularParser(BaseParser):
                 return content_bytes.decode("latin-1", errors="ignore")
 
     def _parse_excel(self, content_bytes: bytes) -> str:
+        import openpyxl
 
         wb = openpyxl.load_workbook(
             io.BytesIO(content_bytes),

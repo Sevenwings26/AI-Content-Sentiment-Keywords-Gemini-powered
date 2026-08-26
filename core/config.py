@@ -51,6 +51,14 @@ try:
         DEFAULT_CANDIDATE_LIMIT: int = 15
         RERANKER_MODEL: str = "ms-marco-TinyBERT-L-2-v2"
 
+        # Database Security & Read-Only Sandbox Settings
+        DB_ENCRYPTION_KEY: Optional[str] = os.getenv("DB_ENCRYPTION_KEY")
+        EXTERNAL_DB_STATEMENT_TIMEOUT_MS: int = int(os.getenv("EXTERNAL_DB_STATEMENT_TIMEOUT_MS", 15000))
+        EXTERNAL_DB_CONNECT_TIMEOUT_SECONDS: int = int(os.getenv("EXTERNAL_DB_CONNECT_TIMEOUT_SECONDS", 5))
+        EXTERNAL_DB_FETCH_BATCH_SIZE: int = int(os.getenv("EXTERNAL_DB_FETCH_BATCH_SIZE", 500))
+        ALLOWED_DB_PRIVATE_HOSTS: str = os.getenv("ALLOWED_DB_PRIVATE_HOSTS", "localhost,127.0.0.1,host.docker.internal,postgres,mysql,oracle,mssql")
+        ALLOWED_DB_PRIVATE_CIDRS: str = os.getenv("ALLOWED_DB_PRIVATE_CIDRS", "")
+
         model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 except ImportError:
@@ -97,5 +105,13 @@ except ImportError:
         DEFAULT_TOP_K: int = 3
         DEFAULT_CANDIDATE_LIMIT: int = 15
         RERANKER_MODEL: str = "ms-marco-TinyBERT-L-2-v2"
+
+        # Database Security & Read-Only Sandbox Settings
+        DB_ENCRYPTION_KEY: Optional[str] = os.getenv("DB_ENCRYPTION_KEY")
+        EXTERNAL_DB_STATEMENT_TIMEOUT_MS: int = int(os.getenv("EXTERNAL_DB_STATEMENT_TIMEOUT_MS", 15000))
+        EXTERNAL_DB_CONNECT_TIMEOUT_SECONDS: int = int(os.getenv("EXTERNAL_DB_CONNECT_TIMEOUT_SECONDS", 5))
+        EXTERNAL_DB_FETCH_BATCH_SIZE: int = int(os.getenv("EXTERNAL_DB_FETCH_BATCH_SIZE", 500))
+        ALLOWED_DB_PRIVATE_HOSTS: str = os.getenv("ALLOWED_DB_PRIVATE_HOSTS", "localhost,127.0.0.1,host.docker.internal,postgres,mysql,oracle,mssql")
+        ALLOWED_DB_PRIVATE_CIDRS: str = os.getenv("ALLOWED_DB_PRIVATE_CIDRS", "")
 
 settings = Settings()

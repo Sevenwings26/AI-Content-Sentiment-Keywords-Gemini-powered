@@ -75,3 +75,4 @@ redis
 boto3
 email-validator
 openpyxl>=3.1.2
+sqlparse>=0.5.0
