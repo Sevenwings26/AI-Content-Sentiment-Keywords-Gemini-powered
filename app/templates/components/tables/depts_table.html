@@ -1,0 +1,34 @@
+<!-- app/templates/components/tables/depts_table.html -->
+<div id="tab-depts" class="tab-content">
+    <div class="table-container">
+        <div class="flex items-center justify-between" style="padding: 20px 24px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 12px;">
+            <div>
+                <h2 style="font-size: 16px; font-weight: 600;">Functional Department Units</h2>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Define organizational units for isolated vector storage and access control</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="openModal('dept-modal')">
+                <span>+ Create Department</span>
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Department Name</th>
+                        <th>Filter Code</th>
+                        <th>Department ID</th>
+                        <th>Created At</th>
+                    </tr>
+                </thead>
+                <tbody id="depts-table-body">
+                    <tr>
+                        <td colspan="4" class="text-center text-muted" style="padding: 36px 20px;">
+                            <div class="spinner" style="margin-bottom: 8px;"></div>
+                            <div>Loading departments...</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

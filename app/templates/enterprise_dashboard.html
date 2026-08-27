@@ -1,0 +1,1032 @@
+<!-- app/templates/enterprise_dashboard.html -->
+{% extends "base.html" %}
+
+{% block title %}Enterprise Governance & Admin Control Center - Multi-Tenant RAG Platform{% endblock %}
+
+{% block extra_head %}
+<style>
+    .dashboard-layout {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        background-color: var(--bg-canvas);
+    }
+
+    /* Top Navigation Header */
+    .dashboard-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background-color: var(--bg-surface);
+        border-bottom: 1px solid var(--border-subtle);
+        padding: 14px 32px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+    }
+
+    .brand-section {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .brand-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background-color: var(--accent-primary);
+        color: var(--accent-primary-text);
+        padding: 5px 12px;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+    .dashboard-container {
+        flex: 1;
+        max-width: 1440px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 28px 32px;
+    }
+
+    /* Metrics Grid */
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 16px;
+        margin-bottom: 28px;
+    }
+
+    .metric-card {
+        background-color: var(--bg-surface-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        transition: transform var(--transition-fast), border-color var(--transition-fast);
+    }
+
+    .metric-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--text-muted);
+    }
+
+    .metric-title {
+        font-size: 11px;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+    }
+
+    .metric-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-top: 6px;
+        line-height: 1.1;
+    }
+
+    /* Tabs Navigation */
+    .tabs-nav {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--border-subtle);
+        margin-bottom: 24px;
+        overflow-x: auto;
+        padding-bottom: 1px;
+    }
+
+    .tab-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        padding: 12px 18px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all var(--transition-fast);
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .tab-btn:hover {
+        color: var(--text-primary);
+        background-color: var(--bg-subtle);
+        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    }
+
+    .tab-btn.active {
+        color: var(--text-primary);
+        border-bottom-color: var(--border-active);
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn var(--transition-fast); }
+
+    /* Empty state layout */
+    .empty-state {
+        text-align: center;
+        padding: 48px 24px;
+    }
+
+    .empty-state-icon {
+        font-size: 36px;
+        margin-bottom: 12px;
+        opacity: 0.8;
+    }
+
+    .empty-state-title {
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .empty-state-desc {
+        font-size: 12px;
+        color: var(--text-secondary);
+        max-width: 360px;
+        margin: 0 auto 16px auto;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-layout">
+
+    <!-- Top Dashboard Header -->
+    <header class="dashboard-header">
+        <div class="brand-section">
+            <div class="brand-pill">⚡ Enterprise Admin</div>
+            <div>
+                <h1 id="org-name-header" style="font-size: 16px; font-weight: 600; line-height: 1.2;">Loading Organization...</h1>
+                <p id="org-slug-header" class="text-xs text-secondary">Tenant: --</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button type="button" class="btn btn-outline btn-sm" data-theme-toggle onclick="Theme.toggle()">
+                <span class="theme-toggle-icon">🌙</span>
+            </button>
+            <a href="/" class="btn btn-outline btn-sm">💬 Chat Workspace</a>
+            <button type="button" class="btn btn-outline btn-sm" onclick="refreshDashboardData(true)">🔄 Refresh</button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="handleDashboardLogout()">🚪 Sign Out</button>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="dashboard-container">
+
+        <!-- 1. Executive Metrics Grid -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-title">Total Members</div>
+                <div class="metric-value" id="metric-users">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Departments</div>
+                <div class="metric-value" id="metric-depts">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Indexed Knowledge Docs</div>
+                <div class="metric-value" id="metric-docs">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Data Connector Jobs</div>
+                <div class="metric-value" id="metric-jobs">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Compliance Audits</div>
+                <div class="metric-value" id="metric-audits">0</div>
+            </div>
+        </div>
+
+        <!-- 2. Governance Tabs Navigation -->
+        <div class="tabs-nav" role="tablist">
+            <button class="tab-btn active" onclick="switchTab('tab-users', this)">👥 User Governance</button>
+            <button class="tab-btn" onclick="switchTab('tab-depts', this)">🏢 Departments</button>
+            <button class="tab-btn" onclick="switchTab('tab-docs', this)">📄 Documents & ACLs</button>
+            <button class="tab-btn" onclick="switchTab('tab-personas', this)">🎭 Assistant Personas</button>
+            <button class="tab-btn" onclick="switchTab('tab-prompts', this)">📝 Prompt Templates</button>
+            <button class="tab-btn" onclick="switchTab('tab-jobs', this)">⚙️ Connector Jobs</button>
+            <button class="tab-btn" onclick="switchTab('tab-siem', this)">🛡️ SIEM Audit Trail</button>
+        </div>
+
+        <!-- 3. Modular Tab Panels -->
+        {% include "components/tables/users_table.html" %}
+        {% include "components/tables/depts_table.html" %}
+        {% include "components/tables/docs_table.html" %}
+        {% include "components/tables/personas_table.html" %}
+        {% include "components/tables/prompts_table.html" %}
+        {% include "components/tables/jobs_table.html" %}
+        {% include "components/tables/siem_panel.html" %}
+
+    </main>
+
+    <!-- 4. Modular Action Modals -->
+    {% include "components/modals/user_modal.html" %}
+    {% include "components/modals/dept_modal.html" %}
+    {% include "components/modals/doc_modal.html" %}
+    {% include "components/modals/persona_modal.html" %}
+    {% include "components/modals/prompt_modal.html" %}
+    {% include "components/modals/job_modal.html" %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let cachedDepartments = [];
+    let siemPollInterval = null;
+
+    // --- Modal Controls ---
+    function openModal(modalId) {
+        const el = document.getElementById(modalId);
+        if (el) el.style.display = "flex";
+    }
+
+    function closeModal(modalId) {
+        const el = document.getElementById(modalId);
+        if (el) el.style.display = "none";
+    }
+
+    // --- Tab Switcher ---
+    function switchTab(tabId, btnElement) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        const target = document.getElementById(tabId);
+        if (target) target.classList.add('active');
+        if (btnElement) btnElement.classList.add('active');
+
+        // Start/Stop SIEM Live Polling
+        if (tabId === 'tab-siem') {
+            fetchSIEMLogs();
+            if (!siemPollInterval) {
+                siemPollInterval = setInterval(fetchSIEMLogs, 8000);
+            }
+        } else if (siemPollInterval) {
+            clearInterval(siemPollInterval);
+            siemPollInterval = null;
+        }
+    }
+
+    // --- Logout Handler ---
+    function handleDashboardLogout() {
+        Auth.logout();
+    }
+
+    // --- File Dropzone Helper ---
+    function handleModalFileSelect(input) {
+        if (input.files && input.files[0]) {
+            document.getElementById('modal-dropzone-filename').textContent = input.files[0].name;
+        }
+    }
+
+    function deriveDeptCode() {
+        const name = document.getElementById('dept-name-input').value;
+        const code = name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+        document.getElementById('dept-code-input').value = code.substring(0, 10);
+    }
+
+    // --- Empty State Render Helper ---
+    function renderEmptyState(icon, title, description, actionBtnHtml = '') {
+        return `
+            <tr>
+                <td colspan="100%">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">${icon}</div>
+                        <div class="empty-state-title">${title}</div>
+                        <div class="empty-state-desc">${description}</div>
+                        ${actionBtnHtml}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
+    // --- Main Dashboard Data Hydration ---
+    async function refreshDashboardData(showToast = false) {
+        if (!Auth.isAuthenticated()) {
+            window.location.href = '/enterprise/login?redirect=/enterprise/dashboard';
+            return;
+        }
+
+        try {
+            // 1. Fetch Metrics
+            const metrics = await fetchAPI('/enterprise/metrics');
+            if (metrics) {
+                document.getElementById('org-name-header').textContent = metrics.org_name;
+                document.getElementById('org-slug-header').textContent = `Tenant Slug: ${metrics.org_slug}`;
+                document.getElementById('metric-users').textContent = metrics.total_users;
+                document.getElementById('metric-depts').textContent = metrics.total_departments;
+                document.getElementById('metric-docs').textContent = metrics.total_documents;
+                document.getElementById('metric-jobs').textContent = metrics.total_jobs;
+                document.getElementById('metric-audits').textContent = metrics.total_audits;
+            }
+
+            // 2. Fetch Departments
+            const depts = await fetchAPI('/enterprise/departments');
+            if (depts) {
+                cachedDepartments = depts;
+                const deptsTable = document.getElementById('depts-table-body');
+                if (depts.length === 0) {
+                    deptsTable.innerHTML = renderEmptyState('🏢', 'No departments created yet', 'Establish functional units to organize access permissions and vector storage.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'dept-modal\')">+ Create Department</button>');
+                } else {
+                    let rowsHtml = '';
+                    let deptOptions = '<option value="">Tenant-Wide / General</option>';
+                    depts.forEach(d => {
+                        rowsHtml += `
+                            <tr>
+                                <td><strong>${escapeHTML(d.name)}</strong></td>
+                                <td><span class="badge badge-acl-department">${escapeHTML(d.code)}</span></td>
+                                <td><code>${escapeHTML(d.id)}</code></td>
+                                <td>${formatDate(d.created_at)}</td>
+                            </tr>
+                        `;
+                        deptOptions += `<option value="${escapeHTML(d.id)}">${escapeHTML(d.name)} (${escapeHTML(d.code)})</option>`;
+                    });
+                    deptsTable.innerHTML = rowsHtml;
+                    document.getElementById('user-dept-select').innerHTML = deptOptions;
+                    document.getElementById('doc-dept-select').innerHTML = deptOptions;
+                    document.getElementById('job-dept-select').innerHTML = deptOptions;
+                }
+            }
+
+            // 3. Fetch Users
+            if (Auth.hasAdminAccess()) {
+                const users = await fetchAPI('/enterprise/users');
+                if (users) {
+                    const usersTable = document.getElementById('users-table-body');
+                    if (users.length === 0) {
+                        usersTable.innerHTML = renderEmptyState('👥', 'No users found', 'Provision employee accounts and assign department clearances.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'user-modal\')">+ Provision User</button>');
+                    } else {
+                        let rowsHtml = '';
+                        users.forEach(u => {
+                            let roleBadgeClass = 'badge-role-member';
+                            if (u.role === 'SUPER_ADMIN') roleBadgeClass = 'badge-role-superadmin';
+                            if (u.role === 'DEPT_ADMIN') roleBadgeClass = 'badge-role-deptadmin';
+                            if (u.role === 'AUDITOR') roleBadgeClass = 'badge-role-auditor';
+
+                            const deptName = cachedDepartments.find(d => d.id === u.department_id)?.name || 'General';
+                            rowsHtml += `
+                                <tr>
+                                    <td><strong>${escapeHTML(u.full_name || 'Member')}</strong></td>
+                                    <td>${escapeHTML(u.email)}</td>
+                                    <td><span class="badge ${roleBadgeClass}">${escapeHTML(u.role)}</span></td>
+                                    <td>${escapeHTML(deptName)}</td>
+                                    <td><span class="badge badge-acl-public">Active</span></td>
+                                    <td>${formatDate(u.created_at)}</td>
+                                </tr>
+                            `;
+                        });
+                        usersTable.innerHTML = rowsHtml;
+                    }
+                }
+            }
+
+            // 4. Fetch Documents
+            const docs = await fetchAPI('/enterprise/documents');
+            if (docs) {
+                const docsTable = document.getElementById('docs-table-body');
+                if (docs.length === 0) {
+                    docsTable.innerHTML = renderEmptyState('📄', 'No documents indexed', 'Upload enterprise knowledge documents to ground assistant queries with citations.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'doc-modal\')">+ Upload Document</button>');
+                } else {
+                    let rowsHtml = '';
+                    docs.forEach(doc => {
+                        let aclBadgeClass = 'badge-acl-department';
+                        if (doc.access_level === 'PUBLIC') aclBadgeClass = 'badge-acl-public';
+                        if (doc.access_level === 'CONFIDENTIAL') aclBadgeClass = 'badge-acl-confidential';
+                        if (doc.access_level === 'RESTRICTED') aclBadgeClass = 'badge-acl-restricted';
+
+                        const deptName = cachedDepartments.find(d => d.id === doc.department_id)?.name || 'General';
+                        rowsHtml += `
+                            <tr>
+                                <td><strong>${escapeHTML(doc.filename)}</strong></td>
+                                <td><span class="badge ${aclBadgeClass}">${escapeHTML(doc.access_level)}</span></td>
+                                <td>${escapeHTML(deptName)}</td>
+                                <td><span class="badge badge-acl-public">${escapeHTML(doc.status)}</span></td>
+                                <td>${formatBytes(doc.size_bytes)}</td>
+                                <td>${formatDate(doc.created_at)}</td>
+                                <td>
+                                    <button type="button" class="btn btn-danger btn-sm" onclick="handleDeleteDocument('${doc.id}', '${escapeHTML(doc.filename)}')" title="Purge document & vectors">
+                                        🗑️ Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    docsTable.innerHTML = rowsHtml;
+                }
+            }
+
+            // 5. Fetch Personas
+            const personas = await fetchAPI('/enterprise/governance/personas');
+            if (personas) {
+                const personasTable = document.getElementById('personas-table-body');
+                if (personas.length === 0) {
+                    personasTable.innerHTML = renderEmptyState('🎭', 'No assistant personas configured', 'Create custom behavioral system instructions for specialized assistant domains.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'persona-modal\')">+ Create Persona</button>');
+                } else {
+                    let rowsHtml = '';
+                    personas.forEach(p => {
+                        rowsHtml += `
+                            <tr>
+                                <td><strong>${escapeHTML(p.name)}</strong></td>
+                                <td>${escapeHTML(p.description || '-')}</td>
+                                <td>${p.department_id ? escapeHTML(p.department_id) : '<span class="badge badge-default">Tenant-Wide</span>'}</td>
+                                <td><code style="font-size: 11px;">${escapeHTML((p.system_template || '').substring(0, 60))}...</code></td>
+                            </tr>
+                        `;
+                    });
+                    personasTable.innerHTML = rowsHtml;
+                }
+            }
+
+            // 6. Fetch Prompt Templates
+            const prompts = await fetchAPI('/enterprise/governance/prompts');
+            if (prompts) {
+                const promptsTable = document.getElementById('prompts-table-body');
+                if (prompts.length === 0) {
+                    promptsTable.innerHTML = renderEmptyState('📝', 'No prompt templates found', 'Curate reusable prompt workflows for enterprise team productivity.', '<button type="button" class="btn btn-primary btn-sm" onclick="openModal(\'prompt-modal\')">+ Create Template</button>');
+                } else {
+                    let rowsHtml = '';
+                    prompts.forEach(pt => {
+                        rowsHtml += `
+                            <tr>
+                                <td><strong>${escapeHTML(pt.title)}</strong></td>
+                                <td><span class="badge badge-acl-department">${escapeHTML(pt.category)}</span></td>
+                                <td>${pt.department_id ? escapeHTML(pt.department_id) : '<span class="badge badge-default">Tenant-Wide</span>'}</td>
+                                <td><span class="text-secondary">${escapeHTML((pt.user_prompt_template || '').substring(0, 75))}...</span></td>
+                            </tr>
+                        `;
+                    });
+                    promptsTable.innerHTML = rowsHtml;
+                }
+            }
+
+            // 7. Fetch Connector Jobs
+            await loadConnectorSchemas();
+            const jobs = await fetchAPI('/enterprise/jobs');
+            if (jobs && Array.isArray(jobs)) {
+                cachedJobsList = jobs;
+                renderJobsTable('ALL');
+            }
+            if (showToast) {
+                Toast.success('Dashboard Synchronized', 'All governance telemetry and table data refreshed.');
+            }
+
+        } catch (err) {
+            console.error('[Dashboard Error]', err);
+            Toast.error('Dashboard Error', err.message || 'Failed to refresh telemetry.');
+        }
+    }
+
+    // --- SIEM Log Fetcher ---
+    async function fetchSIEMLogs(manual = false) {
+        const user = Auth.getUser();
+        if (user && (user.role === 'SUPER_ADMIN' || user.role === 'AUDITOR')) {
+            try {
+                const logs = await fetchAPI('/enterprise/governance/audit-logs');
+                const logBox = document.getElementById('siem-log-box');
+                if (!logs || logs.length === 0) {
+                    logBox.innerHTML = '<div style="color: #64748B;">[SYSTEM] No compliance audit events recorded yet.</div>';
+                } else {
+                    let html = '';
+                    logs.forEach(l => {
+                        html += `
+                            <div style="margin-bottom: 8px; line-height: 1.5; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+                                <span style="color: #64748B;">[${escapeHTML(l.created_at)}]</span>
+                                <span style="color: #34D399; font-weight: 600;">${escapeHTML(l.action)}</span> |
+                                <span style="color: #E2E8F0;">User: ${escapeHTML(l.user_id || 'System')}</span> |
+                                <span style="color: #94A3B8;">${escapeHTML(JSON.stringify(l.details || {}))}</span>
+                            </div>
+                        `;
+                    });
+                    logBox.innerHTML = html;
+                    if (manual) Toast.success('SIEM Updated', 'Telemetry log stream refreshed.');
+                }
+            } catch (err) {
+                console.warn('SIEM Fetch error', err);
+            }
+        } else {
+            document.getElementById('siem-log-box').innerHTML = '<div style="color: #94A3B8;">SIEM Compliance telemetry is restricted to SuperAdmins and Compliance Auditors.</div>';
+        }
+    }
+
+    // --- CRUD Form Submission Handlers ---
+    async function handleCreateUser(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-user');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Provisioning...';
+
+        try {
+            await fetchAPI('/enterprise/users', {
+                method: 'POST',
+                body: {
+                    full_name: document.getElementById('user-name').value.trim(),
+                    email: document.getElementById('user-email').value.trim(),
+                    password: document.getElementById('user-pwd').value,
+                    role: document.getElementById('user-role').value,
+                    department_id: document.getElementById('user-dept-select').value || null
+                }
+            });
+            closeModal('user-modal');
+            document.getElementById('create-user-form').reset();
+            Toast.success('User Provisioned', 'New member account created successfully.');
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Provisioning Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Provision User';
+        }
+    }
+
+    async function handleCreateDepartment(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-dept');
+        btn.disabled = true;
+
+        try {
+            await fetchAPI('/enterprise/departments', {
+                method: 'POST',
+                body: {
+                    name: document.getElementById('dept-name-input').value.trim(),
+                    code: document.getElementById('dept-code-input').value.trim()
+                }
+            });
+            closeModal('dept-modal');
+            document.getElementById('create-dept-form').reset();
+            Toast.success('Department Created', 'Functional isolation unit registered.');
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Department Creation Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Create Department';
+        }
+    }
+
+    async function handleUploadDocument(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById('doc-file-input');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            Toast.warning('File Required', 'Please select a file to ingest.');
+            return;
+        }
+
+        const btn = document.getElementById('upload-doc-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Ingesting...';
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('access_level', document.getElementById('doc-acl-select').value);
+        const deptId = document.getElementById('doc-dept-select').value;
+        if (deptId) formData.append('target_department_id', deptId);
+
+        try {
+            await fetchAPI('/enterprise/documents/upload', {
+                method: 'POST',
+                body: formData
+            });
+            closeModal('doc-modal');
+            document.getElementById('upload-doc-form').reset();
+            document.getElementById('modal-dropzone-filename').textContent = 'Click or drag & drop a file here';
+            Toast.success('Document Ingested', 'Document queued for background parsing and vector indexing.');
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Ingestion Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Upload & Ingest';
+        }
+    }
+
+    async function handleDeleteDocument(docId, filename) {
+        const confirmed = await Modal.confirm(
+            'Purge Document & Vectors?',
+            `Are you sure you want to permanently delete "${filename}" and all its vector embeddings?`,
+            'Yes, Purge Document',
+            'warning'
+        );
+        if (!confirmed) return;
+
+        try {
+            await fetchAPI(`/documents/${docId}`, { method: 'DELETE' });
+            Toast.success('Document Purged', `"${filename}" removed successfully.`);
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Delete Failed', err.message);
+        }
+    }
+
+    async function handleCreatePersona(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-persona');
+        btn.disabled = true;
+
+        try {
+            await fetchAPI('/enterprise/governance/personas', {
+                method: 'POST',
+                body: {
+                    name: document.getElementById('persona-name').value.trim(),
+                    description: document.getElementById('persona-desc').value.trim(),
+                    system_instruction_template: document.getElementById('persona-template').value.trim()
+                }
+            });
+            closeModal('persona-modal');
+            document.getElementById('create-persona-form').reset();
+            Toast.success('Persona Saved', 'Governed assistant persona created.');
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Persona Creation Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save Persona';
+        }
+    }
+
+    async function handleCreatePrompt(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-prompt');
+        btn.disabled = true;
+
+        try {
+            await fetchAPI('/enterprise/governance/prompts', {
+                method: 'POST',
+                body: {
+                    title: document.getElementById('prompt-title').value.trim(),
+                    category: document.getElementById('prompt-category').value,
+                    user_prompt_template: document.getElementById('prompt-body').value.trim()
+                }
+            });
+            closeModal('prompt-modal');
+            document.getElementById('create-prompt-form').reset();
+            Toast.success('Template Saved', 'Governed prompt template saved.');
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Prompt Creation Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save Template';
+        }
+    }
+
+    
+    // =========================================================
+    // Dynamic Schema-Driven Connector Governance & Testing
+    // =========================================================
+    let allConnectorSchemas = [];
+    let currentSelectedConnector = 'POSTGRES_DB';
+    let cachedJobsList = [];
+
+    async function loadConnectorSchemas() {
+        if (allConnectorSchemas.length === 0) {
+            const schemas = await fetchAPI('/enterprise/connectors/schemas');
+            if (schemas && Array.isArray(schemas)) {
+                allConnectorSchemas = schemas;
+            }
+        }
+        return allConnectorSchemas;
+    }
+
+    async function openJobModal() {
+        await loadConnectorSchemas();
+        renderConnectorCards();
+        selectConnectorType(currentSelectedConnector || 'POSTGRES_DB');
+        document.getElementById('connection-test-result').style.display = 'none';
+        openModal('job-modal');
+    }
+
+    function renderConnectorCards() {
+        const grid = document.getElementById('connector-cards-grid');
+        if (!grid || allConnectorSchemas.length === 0) return;
+
+        let cardsHtml = '';
+        allConnectorSchemas.forEach(c => {
+            const isSelected = (c.source_type === currentSelectedConnector) ? 'selected' : '';
+            cardsHtml += `
+                <div class="connector-card ${isSelected}" id="card-${c.source_type}" onclick="selectConnectorType('${c.source_type}')">
+                    <div class="connector-card-icon">${c.icon}</div>
+                    <div style="overflow: hidden;">
+                        <div class="connector-card-name" title="${escapeHTML(c.name)}">${escapeHTML(c.name)}</div>
+                        <div class="connector-card-cat">${escapeHTML(c.category)}</div>
+                    </div>
+                </div>
+            `;
+        });
+        grid.innerHTML = cardsHtml;
+    }
+
+    function selectConnectorType(sourceType) {
+        currentSelectedConnector = sourceType;
+        document.querySelectorAll('.connector-card').forEach(el => el.classList.remove('selected'));
+        const activeCard = document.getElementById(`card-${sourceType}`);
+        if (activeCard) activeCard.classList.add('selected');
+
+        const schema = allConnectorSchemas.find(s => s.source_type === sourceType);
+        if (!schema) return;
+
+        document.getElementById('selected-connector-badge').innerHTML = `${schema.icon} ${escapeHTML(schema.name)}`;
+        document.getElementById('connector-doc-hint').textContent = schema.description;
+
+        renderDynamicFields(schema);
+        document.getElementById('connection-test-result').style.display = 'none';
+    }
+
+    function renderDynamicFields(schema) {
+        const container = document.getElementById('dynamic-fields-container');
+        if (!container) return;
+
+        let html = '';
+        schema.fields.forEach(f => {
+            const isFullWidth = (f.field_type === 'textarea') ? 'grid-column: span 2;' : '';
+            const requiredAttr = f.required ? 'required' : '';
+            const fieldId = `cfg-field-${f.name}`;
+
+            if (f.field_type === 'textarea') {
+                html += `
+                    <div class="form-group" style="${isFullWidth} margin-bottom: 0;">
+                        <label class="form-label" for="${fieldId}">
+                            ${escapeHTML(f.title)} ${f.required ? '<span style="color:var(--color-danger)">*</span>' : ''}
+                        </label>
+                        <textarea id="${fieldId}" data-field-name="${f.name}" class="form-textarea" rows="2"
+                            style="font-family: var(--font-mono); font-size: 12px;"
+                            placeholder="${escapeHTML(f.placeholder || '')}" ${requiredAttr}>${escapeHTML(f.default_value || '')}</textarea>
+                        ${f.description ? `<span class="text-xs text-muted" style="margin-top:2px; display:block;">${escapeHTML(f.description)}</span>` : ''}
+                    </div>
+                `;
+            } else if (f.field_type === 'password' || f.is_secret) {
+                html += `
+                    <div class="form-group" style="${isFullWidth} margin-bottom: 0;">
+                        <label class="form-label" for="${fieldId}">
+                            ${escapeHTML(f.title)} ${f.required ? '<span style="color:var(--color-danger)">*</span>' : ''}
+                        </label>
+                        <div class="password-toggle-wrapper">
+                            <input type="password" id="${fieldId}" data-field-name="${f.name}" class="form-input"
+                                placeholder="${escapeHTML(f.placeholder || '')}" ${requiredAttr}>
+                            <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('${fieldId}')" title="Toggle visibility">👁️</button>
+                        </div>
+                    </div>
+                `;
+            } else if (f.field_type === 'number') {
+                html += `
+                    <div class="form-group" style="${isFullWidth} margin-bottom: 0;">
+                        <label class="form-label" for="${fieldId}">
+                            ${escapeHTML(f.title)} ${f.required ? '<span style="color:var(--color-danger)">*</span>' : ''}
+                        </label>
+                        <input type="number" id="${fieldId}" data-field-name="${f.name}" class="form-input"
+                            value="${f.default_value !== null && f.default_value !== undefined ? f.default_value : ''}"
+                            placeholder="${escapeHTML(f.placeholder || '')}" ${requiredAttr}>
+                    </div>
+                `;
+            } else if (f.field_type === 'boolean') {
+                html += `
+                    <div class="form-group" style="${isFullWidth} margin-bottom: 0; display: flex; align-items: center; gap: 8px; margin-top: 24px;">
+                        <input type="checkbox" id="${fieldId}" data-field-name="${f.name}" ${f.default_value ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
+                        <label class="form-label" for="${fieldId}" style="margin-bottom: 0; cursor: pointer;">
+                            ${escapeHTML(f.title)}
+                        </label>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="form-group" style="${isFullWidth} margin-bottom: 0;">
+                        <label class="form-label" for="${fieldId}">
+                            ${escapeHTML(f.title)} ${f.required ? '<span style="color:var(--color-danger)">*</span>' : ''}
+                        </label>
+                        <input type="text" id="${fieldId}" data-field-name="${f.name}" class="form-input"
+                            value="${escapeHTML(f.default_value || '')}"
+                            placeholder="${escapeHTML(f.placeholder || '')}" ${requiredAttr}>
+                    </div>
+                `;
+            }
+        });
+        container.innerHTML = html;
+    }
+
+    function togglePasswordVisibility(fieldId) {
+        const input = document.getElementById(fieldId);
+        if (input) {
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+    }
+
+    function collectDynamicConfig() {
+        const schema = allConnectorSchemas.find(s => s.source_type === currentSelectedConnector);
+        if (!schema) return {};
+
+        const config = {};
+        schema.fields.forEach(f => {
+            const input = document.getElementById(`cfg-field-${f.name}`);
+            if (input) {
+                if (f.field_type === 'boolean') {
+                    config[f.name] = input.checked;
+                } else if (f.field_type === 'number') {
+                    config[f.name] = input.value ? Number(input.value) : f.default_value;
+                } else {
+                    config[f.name] = input.value.trim();
+                }
+            }
+        });
+        return config;
+    }
+
+    async function handleTestConnection() {
+        const testBtn = document.getElementById('btn-test-connection');
+        const resultBox = document.getElementById('connection-test-result');
+        const config = collectDynamicConfig();
+
+        testBtn.disabled = true;
+        testBtn.innerHTML = `<span class="spinner" style="width:14px; height:14px; border-width:2px;"></span> Testing Connection...`;
+        resultBox.style.display = 'none';
+
+        try {
+            const res = await fetchAPI('/enterprise/connectors/test-connection', {
+                method: 'POST',
+                body: {
+                    source_type: currentSelectedConnector,
+                    connection_config: config
+                }
+            });
+
+            if (res.success) {
+                resultBox.style.display = 'block';
+                resultBox.style.background = 'rgba(16, 185, 129, 0.12)';
+                resultBox.style.border = '1px solid #10b981';
+                resultBox.style.color = '#065f46';
+                resultBox.innerHTML = `<strong>✓ Connection Verified (${res.latency_ms}ms)</strong>: ${escapeHTML(res.message)}`;
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: `Connection Successful (${res.latency_ms}ms)`,
+                        text: res.message,
+                        timer: 4000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Toast.success('Connection Verified', `${res.message} (${res.latency_ms}ms)`);
+                }
+            } else {
+                resultBox.style.display = 'block';
+                resultBox.style.background = 'rgba(239, 68, 68, 0.12)';
+                resultBox.style.border = '1px solid #ef4444';
+                resultBox.style.color = '#991b1b';
+                resultBox.innerHTML = `<strong>✕ Connection Failed (${res.latency_ms}ms)</strong>: ${escapeHTML(res.message)}`;
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Connection Test Failed',
+                        text: res.message,
+                        confirmButtonColor: '#2563eb'
+                    });
+                } else {
+                    Toast.error('Connection Failed', res.message);
+                }
+            }
+        } catch (err) {
+            resultBox.style.display = 'block';
+            resultBox.style.background = 'rgba(239, 68, 68, 0.12)';
+            resultBox.style.border = '1px solid #ef4444';
+            resultBox.style.color = '#991b1b';
+            resultBox.innerHTML = `<strong>✕ Request Error</strong>: ${escapeHTML(err.message)}`;
+            Toast.error('Test Failed', err.message);
+        } finally {
+            testBtn.disabled = false;
+            testBtn.innerHTML = `<span>⚡ Test Connection</span>`;
+        }
+    }
+
+    async function handleCreateJob(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-job');
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner" style="width:14px; height:14px; border-width:2px;"></span> Registering Pipeline...`;
+
+        const config = collectDynamicConfig();
+
+        try {
+            await fetchAPI('/enterprise/jobs/create', {
+                method: 'POST',
+                body: {
+                    name: document.getElementById('job-name').value.trim(),
+                    source_type: currentSelectedConnector,
+                    access_level: document.getElementById('job-acl').value,
+                    target_department_id: document.getElementById('job-dept-select').value || null,
+                    cron_schedule: document.getElementById('job-cron').value.trim() || null,
+                    connection_config: config
+                }
+            });
+            closeModal('job-modal');
+            document.getElementById('create-job-form').reset();
+            Toast.success('Pipeline Registered', `Data source connector "${currentSelectedConnector}" configured successfully.`);
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Registration Failed', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save & Register Job';
+        }
+    }
+
+    function filterJobsCategory(category, btnElement) {
+        document.querySelectorAll('.filter-pills .pill-btn').forEach(b => b.classList.remove('active'));
+        if (btnElement) btnElement.classList.add('active');
+
+        renderJobsTable(category);
+    }
+
+    function renderJobsTable(selectedCategory = 'ALL') {
+        const jobsTable = document.getElementById('jobs-table-body');
+        if (!jobsTable) return;
+
+        let filteredJobs = cachedJobsList;
+        if (selectedCategory !== 'ALL') {
+            filteredJobs = cachedJobsList.filter(j => {
+                const schema = allConnectorSchemas.find(s => s.source_type === j.source_type);
+                return schema && schema.category === selectedCategory;
+            });
+        }
+
+        const badge = document.getElementById('jobs-count-badge');
+        if (badge) badge.textContent = `${filteredJobs.length} Active`;
+
+        if (filteredJobs.length === 0) {
+            jobsTable.innerHTML = renderEmptyState('⚙️', 'No matching connector pipelines', 'Configure automated ingestion from relational databases, S3, Google Drive, or wikis.', '<button type="button" class="btn btn-primary btn-sm" onclick="openJobModal()">+ Connect New Source</button>');
+            return;
+        }
+
+        let rowsHtml = '';
+        filteredJobs.forEach(j => {
+            const schema = allConnectorSchemas.find(s => s.source_type === j.source_type);
+            const icon = schema ? schema.icon : '🔌';
+            const cat = schema ? schema.category : 'External';
+
+            let statusBadge = 'badge-neutral';
+            if (j.status === 'COMPLETED') statusBadge = 'badge-success';
+            else if (j.status === 'RUNNING') statusBadge = 'badge-warning';
+            else if (j.status === 'FAILED') statusBadge = 'badge-danger';
+
+            const lastRunStr = j.last_run_at ? new Date(j.last_run_at).toLocaleString() : '<span class="text-muted">Never</span>';
+
+            rowsHtml += `
+                <tr>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text-primary);">${escapeHTML(j.name)}</div>
+                        <div class="text-xs text-muted">${escapeHTML(cat)}</div>
+                    </td>
+                    <td>
+                        <span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 500;">
+                            <span>${icon}</span>
+                            <code>${escapeHTML(j.source_type)}</code>
+                        </span>
+                    </td>
+                    <td><span class="badge badge-acl-${(j.access_level || 'department').toLowerCase()}">${escapeHTML(j.access_level)}</span></td>
+                    <td><span class="badge ${statusBadge}">${escapeHTML(j.status)}</span></td>
+                    <td><strong>${j.documents_processed_count}</strong> docs</td>
+                    <td><span class="text-secondary text-xs">${lastRunStr}</span></td>
+                    <td>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="handleTriggerJob('${j.id}', '${escapeHTML(j.name)}')">
+                            ▶ Sync Now
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        jobsTable.innerHTML = rowsHtml;
+    }
+
+    async function handleTriggerJob(jobId, jobName) {
+        try {
+            const res = await fetchAPI(`/enterprise/jobs/${jobId}/trigger`, { method: 'POST' });
+            Toast.success('Job Triggered', `"${jobName}" ingestion task queued (Task ID: ${res.task_id}).`);
+            refreshDashboardData();
+        } catch (err) {
+            Toast.error('Trigger Failed', err.message);
+        }
+    }
+
+    // Initialize on DOM Ready
+    window.addEventListener('DOMContentLoaded', () => {
+        refreshDashboardData();
+    });
+</script>
+{% endblock %}

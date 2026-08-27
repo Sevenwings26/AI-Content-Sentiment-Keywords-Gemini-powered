@@ -1,0 +1,37 @@
+<!-- app/templates/components/tables/docs_table.html -->
+<div id="tab-docs" class="tab-content">
+    <div class="table-container">
+        <div class="flex items-center justify-between" style="padding: 20px 24px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 12px;">
+            <div>
+                <h2 style="font-size: 16px; font-weight: 600;">Indexed Knowledge Documents & Security ACLs</h2>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Enterprise knowledge vectors with department and clearance level security</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="openModal('doc-modal')">
+                <span>+ Upload Document</span>
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Document Filename</th>
+                        <th>Access Clearance (ACL)</th>
+                        <th>Department</th>
+                        <th>Status</th>
+                        <th>File Size</th>
+                        <th>Ingested Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="docs-table-body">
+                    <tr>
+                        <td colspan="7" class="text-center text-muted" style="padding: 36px 20px;">
+                            <div class="spinner" style="margin-bottom: 8px;"></div>
+                            <div>Loading indexed knowledge documents...</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

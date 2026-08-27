@@ -1,105 +1,75 @@
-﻿# Docker Commands & Database Migration Guide
-=============================================
+﻿# Generate migration script
 
-This file contains instructions on how to open a command line inside your running Docker container to run the Alembic database migrations, as well as troubleshooting steps for connecting to your host PostgreSQL database.
+docker compose exec wings_retrival_ai alembic revision --autogenerate -m "describe_changes"
 
-## 1. Quick Migration Commands
+# Apply migration
 
-If you just want to run the migrations directly without opening an interactive command line, you can run one of these commands from your host terminal (PowerShell or WSL terminal) in the directory where `docker-compose.yml` is located:
-
-### If the containers are already running:
-```bash
 docker compose exec wings_retrival_ai alembic upgrade head
-```
 
-### If the containers are NOT running:
-```bash
-docker compose run --rm wings_retrival_ai alembic upgrade head
-```
+# Rebuild containers
 
----
+docker compose build --no-cache
+docker compose up -d --build
+docker compose logs -f
 
-## 2. How to Open the Command Line (Interactive Terminal) in Docker
+# Start all services (FastAPI, Celery, Qdrant, Redis)
 
-If you want to open a bash shell inside the Docker container to run migrations manually or execute other Python commands:
+docker compose up -d
 
-### Step 1: Open the interactive shell
-* **If the container is already running:**
-  ```bash
-  docker compose exec wings_retrival_ai bash
-  ```
-  *(Note: You can also use `docker exec -it wings_retrival_ai bash` if using standard Docker commands)*
+# View live FastAPI app logs
 
-* **If the container is NOT running:**
-  ```bash
-  docker compose run --rm wings_retrival_ai bash
-  ```
+docker compose logs -f wings_retrival_ai
 
-### Step 2: Run your migration syntax
-Once you are inside the container's shell (you will see a prompt like `root@<container-id>:/app#`), run:
-```bash
-alembic upgrade head
-```
+# View live Celery worker logs
 
-### Step 3: Exit the container
-To leave the container's command line and return to your host terminal, simply type:
-```bash
-exit
-```
+docker compose logs -f wings_ingestion_worker
 
----
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE datname = 'testdb'
+AND pid <> pg_backend_pid();
 
-## 3. Important Setup for Host PostgreSQL (Linux/WSL)
+# Rebuild containers
 
-Since your Postgres database lives on the host (local Linux machine) and your FastAPI app is running inside a Docker container, you must configure PostgreSQL on Linux to accept connections from the Docker network.
+docker compose build --no-cache
+docker compose up -d --build
 
-If you get a connection timeout or connection refused error when running migrations, follow these steps on your Linux host:
+# Start all services (FastAPI, Celery, Qdrant, Redis)
 
-### Step A: Configure PostgreSQL to listen on all interfaces
-1. Open the PostgreSQL config file (path depends on your PostgreSQL version, e.g., v16):
-   ```bash
-   sudo nano /etc/postgresql/16/main/postgresql.conf
-   ```
-2. Find the line:
-   `#listen_addresses = 'localhost'`
-3. Uncomment it and change it to:
-   `listen_addresses = '*'`
-4. Save and exit (Ctrl+O, Enter, Ctrl+X).
+docker compose up -d
 
-### Step B: Allow connections from the Docker network
-1. Open the client authentication file:
-   ```bash
-   sudo nano /etc/postgresql/16/main/pg_hba.conf
-   ```
-2. Scroll to the bottom and add this line to allow connection from all IP addresses:
-   ```
-   host    all             all             0.0.0.0/0               scram-sha-256
-   ```
-   *(Note: Use `md5` instead of `scram-sha-256` if using an older Postgres version or if authentication fails).*
-3. Save and exit.
+# View live FastAPI app logs
 
-### Step C: Restart the PostgreSQL service
-Apply changes by restarting the PostgreSQL service on your Linux host:
-```bash
-sudo systemctl restart postgresql
+docker compose logs -f wings_retrival_ai
+
+# View live Celery worker logs
+
+docker compose logs -f wings_ingestion_worker
+
+docker compose exec wings_retrival_ai alembic init alembic
+
+# Generate migration script
+
+docker compose exec wings_retrival_ai alembic revision --autogenerate -m "describe_changes"
+
+# Apply migration
+
+docker compose exec wings_retrival_ai alembic upgrade head
+
+# To execute python script
+
+docker compose exec wings_retrival_ai python benchmarking/test_verification.py
+
 # OR
-sudo service postgresql restart
-```
 
----
+# 1. Open an interactive shell inside the container
 
-## 4. Useful Alembic Commands
+docker compose exec -it wings_retrival_ai /bin/bash
 
-Here are other helpful commands you can run inside the container shell:
-* **Check current migration status:**
-  ```bash
-  alembic current
-  ```
-* **View migration history:**
-  ```bash
-  alembic history
-  ```
-* **Generate a new migration script (if you change SQLAlchemy models):**
-  ```bash
-  alembic revision --autogenerate -m "description of changes"
-  ```
+# 2. Inside the container shell, run:
+
+python benchmarking/test_verification.py
+
+# 3. Exit the container shell when done:
+
+exit

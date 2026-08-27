@@ -1,0 +1,148 @@
+<!-- app/templates/components/modals/job_modal.html -->
+<div id="job-modal" class="modal-backdrop" onclick="if(event.target === this) closeModal('job-modal')">
+    <div class="modal-box" style="max-width: 820px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-header">
+            <div>
+                <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+                    <span>🔌 Connect Knowledge Source</span>
+                    <span id="selected-connector-badge" class="badge badge-info">PostgreSQL</span>
+                </h3>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Configure schema-driven ingestion pipeline with instant pre-flight connection testing</p>
+            </div>
+            <button type="button" class="modal-close" onclick="closeModal('job-modal')" aria-label="Close modal">&times;</button>
+        </div>
+
+        <!-- 1. Categorized Source Selection Cards -->
+        <div style="margin-bottom: 20px;">
+            <label class="form-label" style="margin-bottom: 8px; font-weight: 600;">1. Select Data Source Type</label>
+            <div id="connector-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px;">
+                <!-- Dynamically populated from /enterprise/connectors/schemas -->
+            </div>
+        </div>
+
+        <form id="create-job-form" onsubmit="handleCreateJob(event)">
+            <!-- 2. Common Pipeline Governance Settings -->
+            <div style="background: var(--bg-surface-2); padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); margin-bottom: 18px;">
+                <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
+                    2. Pipeline Governance & Scope
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" for="job-name">Pipeline / Job Name</label>
+                        <input type="text" id="job-name" class="form-input" placeholder="e.g. Engineering Knowledge Sync" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" for="job-acl">Security Access Clearance</label>
+                        <select id="job-acl" class="form-select">
+                            <option value="DEPARTMENT">DEPARTMENT (Target Dept Members Only)</option>
+                            <option value="PUBLIC">PUBLIC (Searchable by All Employees)</option>
+                            <option value="CONFIDENTIAL">CONFIDENTIAL (Department Admins Only)</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" for="job-dept-select">Target Department</label>
+                        <select id="job-dept-select" class="form-select"></select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" for="job-cron">Cron Schedule (Optional)</label>
+                        <input type="text" id="job-cron" class="form-input" placeholder="e.g. 0 2 * * * (Daily 2 AM)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Dynamic Schema-Driven Configuration Fields -->
+            <div style="margin-bottom: 18px;">
+                <div class="flex items-center justify-between" style="margin-bottom: 8px;">
+                    <h4 style="font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
+                        3. Connection Credentials & Parameters
+                    </h4>
+                    <span id="connector-doc-hint" class="text-xs text-muted"></span>
+                </div>
+
+                <div id="dynamic-fields-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <!-- Dynamically rendered inputs based on Pydantic schemas -->
+                </div>
+            </div>
+
+            <!-- Pre-Flight Test Result Box -->
+            <div id="connection-test-result" style="display: none; padding: 10px 14px; border-radius: var(--radius-md); margin-bottom: 16px; font-size: 13px;"></div>
+
+            <!-- Modal Action Buttons -->
+            <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center;">
+                <!-- Test Connection Button -->
+                <button type="button" class="btn btn-outline" id="btn-test-connection" onclick="handleTestConnection()" style="display: flex; align-items: center; gap: 6px;">
+                    <span>⚡ Test Connection</span>
+                </button>
+
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('job-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-job">Save & Register Job</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.connector-card {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    background: var(--bg-surface-1);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+}
+.connector-card:hover {
+    border-color: var(--color-primary);
+    background: var(--bg-surface-2);
+}
+.connector-card.selected {
+    border-color: var(--color-primary);
+    background: rgba(37, 99, 235, 0.08);
+    box-shadow: 0 0 0 1.5px var(--color-primary);
+}
+.connector-card-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+.connector-card-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.connector-card-cat {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+.password-toggle-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.password-toggle-wrapper input {
+    padding-right: 36px;
+    width: 100%;
+}
+.password-toggle-btn {
+    position: absolute;
+    right: 8px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+}
+.password-toggle-btn:hover {
+    color: var(--text-primary);
+}
+</style>

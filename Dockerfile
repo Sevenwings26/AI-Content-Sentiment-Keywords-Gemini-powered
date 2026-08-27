@@ -2,6 +2,7 @@
 FROM python:3.12-slim
 
 WORKDIR /app
+ENV PYTHONPATH=/app
 
 # Install system dependencies needed to build packages like psycopg2
 RUN apt-get update && apt-get install -y \
@@ -21,5 +22,5 @@ COPY . .
 EXPOSE 4500
 
 # Start Uvicorn pointing to your app entrypoint
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "4500"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--app-dir", "/app", "--host", "0.0.0.0", "--port", "4500"]
 

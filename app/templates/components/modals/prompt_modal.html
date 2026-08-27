@@ -1,0 +1,35 @@
+<!-- app/templates/components/modals/prompt_modal.html -->
+<div id="prompt-modal" class="modal-backdrop" onclick="if(event.target === this) closeModal('prompt-modal')">
+    <div class="modal-box">
+        <div class="modal-header">
+            <div>
+                <h3 class="modal-title">Create Governed Prompt Template</h3>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Standardized prompt workflows for department teams</p>
+            </div>
+            <button type="button" class="modal-close" onclick="closeModal('prompt-modal')" aria-label="Close modal">&times;</button>
+        </div>
+        <form id="create-prompt-form" onsubmit="handleCreatePrompt(event)">
+            <div class="form-group">
+                <label class="form-label" for="prompt-title">Template Title</label>
+                <input type="text" id="prompt-title" class="form-input" placeholder="e.g. Extract Financial KPIs" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="prompt-category">Workflow Category</label>
+                <select id="prompt-category" class="form-select" required>
+                    <option value="QNA">QNA (Document Question & Answer)</option>
+                    <option value="SUMMARY">SUMMARY (Executive Briefing)</option>
+                    <option value="EXTRACTION">EXTRACTION (Structured Entity Parsing)</option>
+                    <option value="AUDIT">AUDIT (Compliance & Risk Check)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="prompt-body">Prompt Template Body</label>
+                <textarea id="prompt-body" class="form-textarea" rows="4" placeholder="Analyze the document and extract key revenue, EBITDA, and YoY growth percentages into a structured Markdown table." required></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('prompt-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="btn-submit-prompt">Save Template</button>
+            </div>
+        </form>
+    </div>
+</div>

@@ -1,0 +1,356 @@
+<!-- app/templates/login.html -->
+{% extends "base.html" %}
+
+{% block title %}Enterprise AI Portal - Sign In & Tenant Onboarding{% endblock %}
+
+{% block extra_head %}
+<style>
+    .auth-page {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background-color: var(--bg-canvas);
+        position: relative;
+    }
+
+    .auth-theme-toggle {
+        position: absolute;
+        top: 24px;
+        right: 24px;
+    }
+
+    .auth-card {
+        width: 100%;
+        max-width: 480px;
+        background-color: var(--bg-surface-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-xl);
+        padding: 40px 36px;
+        box-shadow: var(--shadow-xl);
+        animation: authCardFadeIn 0.3s ease-out;
+    }
+
+    @keyframes authCardFadeIn {
+        from { opacity: 0; transform: translateY(8px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .auth-header {
+        text-align: center;
+        margin-bottom: 28px;
+    }
+
+    .brand-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background-color: var(--accent-primary);
+        color: var(--accent-primary-text);
+        padding: 5px 12px;
+        border-radius: var(--radius-full);
+        font-weight: 700;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin-bottom: 14px;
+    }
+
+    .auth-header h1 {
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+
+    .auth-header p {
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+
+    /* Tabs */
+    .auth-tabs {
+        display: flex;
+        background-color: var(--bg-subtle);
+        border-radius: var(--radius-md);
+        padding: 4px;
+        margin-bottom: 24px;
+        border: 1px solid var(--border-subtle);
+    }
+
+    .auth-tab-btn {
+        flex: 1;
+        padding: 9px 12px;
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .auth-tab-btn.active {
+        background-color: var(--bg-surface-elevated);
+        color: var(--text-primary);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .form-panel { display: none; }
+    .form-panel.active { display: block; animation: fadeIn var(--transition-fast); }
+
+    .form-row {
+        display: flex;
+        gap: 12px;
+    }
+
+    .form-row .form-group { flex: 1; }
+
+    .auth-footer {
+        margin-top: 28px;
+        text-align: center;
+        font-size: 12px;
+        color: var(--text-muted);
+        border-top: 1px solid var(--border-subtle);
+        padding-top: 18px;
+    }
+
+    .auth-footer a {
+        color: var(--text-primary);
+        font-weight: 500;
+        text-decoration: underline;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="auth-theme-toggle">
+        <button type="button" class="btn btn-outline btn-sm" data-theme-toggle onclick="Theme.toggle()">
+            <span class="theme-toggle-icon">🌙</span>
+        </button>
+    </div>
+
+    <div class="auth-card">
+        <div class="auth-header">
+            <div class="brand-badge">⚡ Enterprise AI Portal</div>
+            <h1 id="header-title">Welcome Back</h1>
+            <p id="header-desc">Sign in to access your multi-tenant cognitive workspace</p>
+        </div>
+
+        <div class="auth-tabs" role="tablist">
+            <button class="auth-tab-btn active" id="tab-login-btn" onclick="selectAuthTab('login')">Sign In</button>
+            <button class="auth-tab-btn" id="tab-register-btn" onclick="selectAuthTab('register')">Register Tenant</button>
+        </div>
+
+        <!-- 1. Sign In Form -->
+        <div id="login-panel" class="form-panel active">
+            <form id="login-form" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label class="form-label" for="login-email">Work Email</label>
+                    <input type="email" id="login-email" class="form-input" placeholder="name@company.com" required autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="login-password">Password</label>
+                    <input type="password" id="login-password" class="form-input" placeholder="••••••••••••" required autocomplete="current-password">
+                </div>
+
+                <button type="submit" class="btn btn-primary w-full" id="login-submit-btn" style="margin-top: 8px;">
+                    Sign In to Workspace
+                </button>
+            </form>
+        </div>
+
+        <!-- 2. Tenant Onboarding Form -->
+        <div id="register-panel" class="form-panel">
+            <form id="register-form" onsubmit="handleRegister(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="org-name">Organization Name</label>
+                        <input type="text" id="org-name" class="form-input" placeholder="Acme Global Inc" required oninput="deriveSlug()">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="org-slug">Tenant Slug</label>
+                        <input type="text" id="org-slug" class="form-input" placeholder="acme-global" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="admin-name">SuperAdmin Full Name</label>
+                    <input type="text" id="admin-name" class="form-input" placeholder="Sarah Connor" required autocomplete="name">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="admin-email">Admin Work Email</label>
+                    <input type="email" id="admin-email" class="form-input" placeholder="admin@acmeglobal.com" required autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="admin-password">Secure Password</label>
+                    <input type="password" id="admin-password" class="form-input" placeholder="Minimum 8 characters" required autocomplete="new-password">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="dept-name">Initial Department</label>
+                        <input type="text" id="dept-name" class="form-input" value="Engineering" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="dept-code">Code</label>
+                        <input type="text" id="dept-code" class="form-input" value="ENG" required>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-full" id="register-submit-btn" style="margin-top: 8px;">
+                    Provision Organization & SuperAdmin
+                </button>
+            </form>
+        </div>
+
+        <div class="auth-footer">
+            <p>Protected by Enterprise Multi-Tenant RBAC & Vector Isolation</p>
+            <p style="margin-top: 8px;"><a href="/">← Return to Public Chat Interface</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function selectAuthTab(tab) {
+        const loginBtn = document.getElementById("tab-login-btn");
+        const registerBtn = document.getElementById("tab-register-btn");
+        const loginPanel = document.getElementById("login-panel");
+        const registerPanel = document.getElementById("register-panel");
+        const headerTitle = document.getElementById("header-title");
+        const headerDesc = document.getElementById("header-desc");
+
+        if (tab === "login") {
+            loginBtn.classList.add("active");
+            registerBtn.classList.remove("active");
+            loginPanel.classList.add("active");
+            registerPanel.classList.remove("active");
+            headerTitle.textContent = "Welcome Back";
+            headerDesc.textContent = "Sign in to access your multi-tenant cognitive workspace";
+        } else {
+            registerBtn.classList.add("active");
+            loginBtn.classList.remove("active");
+            registerPanel.classList.add("active");
+            loginPanel.classList.remove("active");
+            headerTitle.textContent = "Register Tenant";
+            headerDesc.textContent = "Onboard your organization and configure root SuperAdmin";
+        }
+    }
+
+    function deriveSlug() {
+        const name = document.getElementById("org-name").value;
+        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+        document.getElementById("org-slug").value = slug;
+    }
+
+    // --- Handle Login ---
+    async function handleLogin(e) {
+        e.preventDefault();
+        const btn = document.getElementById("login-submit-btn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Signing in...';
+
+        const email = document.getElementById("login-email").value.trim();
+        const password = document.getElementById("login-password").value;
+
+        try {
+            const data = await fetchAPI("/enterprise/auth/login", {
+                method: "POST",
+                body: { email: email, password: password }
+            });
+
+            // Store Authentication State via Auth manager
+            const userObj = {
+                id: data.user_id,
+                email: email,
+                role: data.role || "MEMBER",
+                org_id: data.org_id,
+                department_id: data.department_id
+            };
+            Auth.setAuth(data.access_token, userObj);
+
+            Toast.success("Sign In Successful", "Redirecting to your workspace...");
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const redirectUrl = urlParams.get('redirect') || (data.role === "SUPER_ADMIN" || data.role === "DEPT_ADMIN" ? "/enterprise/dashboard" : "/");
+
+            setTimeout(() => {
+                window.location.href = redirectUrl;
+            }, 600);
+
+        } catch (err) {
+            Toast.error("Authentication Failed", err.message || "Invalid email or password.");
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "Sign In to Workspace";
+        }
+    }
+
+    // --- Handle Tenant Onboarding ---
+    async function handleRegister(e) {
+        e.preventDefault();
+        const btn = document.getElementById("register-submit-btn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Provisioning Tenant...';
+
+        const payload = {
+            org_name: document.getElementById("org-name").value.trim(),
+            org_slug: document.getElementById("org-slug").value.trim(),
+            admin_name: document.getElementById("admin-name").value.trim(),
+            admin_email: document.getElementById("admin-email").value.trim(),
+            admin_password: document.getElementById("admin-password").value,
+            department_name: document.getElementById("dept-name").value.trim(),
+            department_code: document.getElementById("dept-code").value.trim()
+        };
+
+        try {
+            const data = await fetchAPI("/enterprise/auth/register-tenant", {
+                method: "POST",
+                body: payload
+            });
+
+            const userObj = {
+                id: data.user_id,
+                full_name: payload.admin_name,
+                email: payload.admin_email,
+                role: "SUPER_ADMIN",
+                org_id: data.org_id,
+                department_id: data.department_id
+            };
+            Auth.setAuth(data.access_token, userObj);
+
+            Toast.success("Tenant Provisioned!", `Organization "${payload.org_name}" is ready.`);
+
+            setTimeout(() => {
+                window.location.href = "/enterprise/dashboard";
+            }, 800);
+
+        } catch (err) {
+            Toast.error("Registration Failed", err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "Provision Organization & SuperAdmin";
+        }
+    }
+
+    // Check URL parameters for tab=register
+    window.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('tab') === 'register') {
+            selectAuthTab('register');
+        }
+    });
+</script>
+{% endblock %}

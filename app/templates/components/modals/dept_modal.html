@@ -1,0 +1,27 @@
+<!-- app/templates/components/modals/dept_modal.html -->
+<div id="dept-modal" class="modal-backdrop" onclick="if(event.target === this) closeModal('dept-modal')">
+    <div class="modal-box">
+        <div class="modal-header">
+            <div>
+                <h3 class="modal-title">Create Functional Department</h3>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Establish isolation domains for role-based knowledge retrieval</p>
+            </div>
+            <button type="button" class="modal-close" onclick="closeModal('dept-modal')" aria-label="Close modal">&times;</button>
+        </div>
+        <form id="create-dept-form" onsubmit="handleCreateDepartment(event)">
+            <div class="form-group">
+                <label class="form-label" for="dept-name-input">Department Name</label>
+                <input type="text" id="dept-name-input" class="form-input" placeholder="e.g. Legal & Compliance" required oninput="deriveDeptCode()">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="dept-code-input">Department Code / Slug</label>
+                <input type="text" id="dept-code-input" class="form-input" placeholder="e.g. LEGAL" required>
+                <span class="form-hint">Used as a metadata filter key in multi-tenant Qdrant vector payloads.</span>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('dept-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="btn-submit-dept">Create Department</button>
+            </div>
+        </form>
+    </div>
+</div>
