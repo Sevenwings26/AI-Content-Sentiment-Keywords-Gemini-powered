@@ -60,3 +60,7 @@ class RAGSecurityFilterBuilder:
             or_clauses.append(dept_clause)
 
         return Filter(must=[tenant_condition], should=or_clauses if or_clauses else None)
+
+    # Class-level alias for convenient calling
+    build = build_search_filter
+

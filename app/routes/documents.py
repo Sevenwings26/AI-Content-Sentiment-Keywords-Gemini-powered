@@ -5,7 +5,7 @@ from typing import Optional, List
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_db, get_current_user, get_orchestrator, require_role
+from app.dependencies import get_db, get_current_user, get_optional_user, resolve_effective_user, get_orchestrator, require_role
 from modules.auth.domain.tokens import TokenData
 from modules.auth.domain.models import AccessLevel
 from modules.auth.repositories.user_repository import UserRepository
@@ -141,7 +141,7 @@ def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    orchestrator.delete_document_vectors(document_id, current_user.org_id)
+    orchestrator.delete_document_vectors(document_id, current_user.org_id, db=db)
     DocumentRepository.delete_document(db, document_id, current_user.org_id)
 
     AuditLogger.log(
@@ -155,3 +155,82 @@ def delete_document(
     )
 
     return {"status": "success", "message": f"Document '{doc.filename}' purged successfully"}
+
+@router.get("/documents/{document_id}/status")
+def get_document_indexing_status(
+    document_id: str,
+    user: Optional[TokenData] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Monitors real-time document indexing status for personal & workspace uploads."""
+    effective_user = resolve_effective_user(user, db)
+    doc = DocumentRepository.get_document_by_id(db, document_id, effective_user.org_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return {
+        "document_id": doc.id,
+        "filename": doc.filename,
+        "status": doc.status.value if hasattr(doc.status, "value") else str(doc.status),
+        "chunk_count": doc.chunk_count,
+        "error_message": doc.error_message,
+        "access_level": doc.access_level.value if hasattr(doc.access_level, "value") else str(doc.access_level),
+        "created_at": doc.created_at.isoformat() if doc.created_at else None
+    }
+
+@router.get("/enterprise/documents/{document_id}/status")
+def get_enterprise_document_indexing_status(
+    document_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Monitors real-time document indexing status for enterprise administration."""
+    doc = DocumentRepository.get_document_by_id(db, document_id, current_user.org_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return {
+        "document_id": doc.id,
+        "filename": doc.filename,
+        "status": doc.status.value if hasattr(doc.status, "value") else str(doc.status),
+        "chunk_count": doc.chunk_count,
+        "error_message": doc.error_message,
+        "access_level": doc.access_level.value if hasattr(doc.access_level, "value") else str(doc.access_level),
+        "created_at": doc.created_at.isoformat() if doc.created_at else None
+    }
+
+@router.post("/documents/{document_id}/reindex", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/enterprise/documents/{document_id}/reindex", status_code=status.HTTP_202_ACCEPTED)
+def reindex_document(
+    document_id: str,
+    current_user: TokenData = Depends(require_role(["SUPER_ADMIN", "DEPT_ADMIN"])),
+    db: Session = Depends(get_db),
+    orchestrator: UnifiedRAGOrchestrator = Depends(get_orchestrator)
+):
+    """Purges existing vector points and relational chunks, resetting document for re-indexing."""
+    doc = DocumentRepository.get_document_by_id(db, document_id, current_user.org_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # 1. Purge existing vectors and chunks
+    orchestrator.delete_document_vectors(document_id, current_user.org_id, db=db)
+
+    # 2. Reset status to PROCESSING
+    DocumentRepository.update_document_status(db, document_id, DocumentStatus.PROCESSING, chunk_count=0)
+
+    AuditLogger.log(
+        db=db,
+        org_id=current_user.org_id,
+        user_id=current_user.user_id,
+        action="DOCUMENT_REINDEX_QUEUED",
+        resource_type="DOCUMENT",
+        resource_id=document_id,
+        details={"filename": doc.filename}
+    )
+
+    return {
+        "status": "accepted",
+        "message": f"Document '{doc.filename}' queued for re-indexing and dual-write vector generation.",
+        "document_id": document_id
+    }
+

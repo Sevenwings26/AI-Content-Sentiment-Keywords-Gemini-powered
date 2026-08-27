@@ -289,8 +289,11 @@ class UnifiedRAGOrchestrator:
         uploader_id: Optional[str] = None,
         access_level: str = "DEPARTMENT",
         session_id: Optional[str] = None,
-        mime_type: Optional[str] = None
+        mime_type: Optional[str] = None,
+        db: Optional[Any] = None
     ) -> int:
+        from modules.governance.domain.models import DocumentChunk
+
         connector = FileConnector(filename=filename, content_bytes=file_bytes, mime_type=mime_type)
         raw_doc = next(connector.fetch_documents())
 
@@ -300,11 +303,22 @@ class UnifiedRAGOrchestrator:
         if not chunks:
             raise ValueError("No extractable text found in document.")
 
-        points = []
-        for idx, chunk in enumerate(chunks):
-            point_id = str(uuid.uuid4())
-            embedding = self.llm.get_embeddings(chunk)
+        # 1. Batch / Parallelized Vector Embedding Generation
+        embeddings = []
+        if hasattr(self.llm, "get_embeddings_batch"):
+            try:
+                embeddings = self.llm.get_embeddings_batch(chunks)
+            except Exception:
+                embeddings = [self.llm.get_embeddings(c) for c in chunks]
+        else:
+            embeddings = [self.llm.get_embeddings(c) for c in chunks]
 
+        # 2. Prepare Points for Qdrant and Entities for PostgreSQL
+        points = []
+        db_chunk_records = []
+
+        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            point_id = str(uuid.uuid4())
             payload = {
                 "document_id": document_id,
                 "org_id": org_id,
@@ -326,7 +340,42 @@ class UnifiedRAGOrchestrator:
                 )
             )
 
-        self.vector_store.upsert_chunks(points)
+            if db is not None:
+                db_chunk_records.append(
+                    DocumentChunk(
+                        id=point_id,
+                        document_id=document_id,
+                        org_id=org_id,
+                        department_id=department_id or "",
+                        uploader_id=uploader_id or "",
+                        access_level=access_level,
+                        chunk_index=idx,
+                        content=chunk,
+                        embedding=embedding,
+                        metadata_json={
+                            "source_type": raw_doc.source_type,
+                            "filename": filename,
+                            "session_id": session_id or ""
+                        }
+                    )
+                )
+
+        # 3. Dual-Write: Upsert to Qdrant (Primary Search) & Persist to PostgreSQL (Source of Truth)
+        try:
+            self.vector_store.upsert_chunks(points)
+
+            if db is not None and db_chunk_records:
+                # Remove any stale chunks for this doc before inserting fresh ones
+                db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
+                db.bulk_save_objects(db_chunk_records)
+                db.commit()
+
+        except Exception as e:
+            logger.error(f"Dual-write ingestion failed for doc '{document_id}': {e}")
+            if db is not None:
+                db.rollback()
+            raise e
+
         return len(chunks)
 
     def delete_session_vectors(self, session_id: str) -> bool:
@@ -335,12 +384,27 @@ class UnifiedRAGOrchestrator:
         )
         return self.vector_store.delete_by_filter(doc_filter)
 
-    def delete_document_vectors(self, document_id: str, org_id: str) -> bool:
+    def delete_document_vectors(self, document_id: str, org_id: str, db: Optional[Any] = None) -> bool:
+        from modules.governance.domain.models import DocumentChunk
+
         doc_filter = Filter(
             must=[
                 FieldCondition(key="org_id", match=MatchValue(value=org_id)),
                 FieldCondition(key="document_id", match=MatchValue(value=document_id))
             ]
         )
-        return self.vector_store.delete_by_filter(doc_filter)
+        qdrant_deleted = self.vector_store.delete_by_filter(doc_filter)
+
+        if db is not None:
+            try:
+                db.query(DocumentChunk).filter(
+                    DocumentChunk.document_id == document_id,
+                    DocumentChunk.org_id == org_id
+                ).delete()
+                db.commit()
+            except Exception as e:
+                logger.error(f"Failed to delete relational chunks for doc '{document_id}': {e}")
+                db.rollback()
+
+        return qdrant_deleted
         
