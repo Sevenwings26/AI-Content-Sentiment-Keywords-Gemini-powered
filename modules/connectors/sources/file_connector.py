@@ -9,6 +9,14 @@ class FileConnector(BaseConnector):
         self.content_bytes = content_bytes
         self.mime_type = mime_type
 
+    def test_connection(self) -> dict:
+        return {
+            "success": True,
+            "latency_ms": 0.1,
+            "message": f"File stream verified: {self.filename} ({len(self.content_bytes or b'')} bytes)",
+            "details": {"filename": self.filename}
+        }
+
     def fetch_documents(self) -> Generator[RawDocument, None, None]:
         doc_id = str(uuid.uuid4())
         yield RawDocument(
@@ -19,4 +27,5 @@ class FileConnector(BaseConnector):
             mime_type=self.mime_type,
             metadata={"filename": self.filename}
         )
+
 

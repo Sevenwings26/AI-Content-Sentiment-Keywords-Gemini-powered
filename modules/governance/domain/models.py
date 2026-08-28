@@ -2,10 +2,12 @@
 import enum
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, ForeignKey, DateTime, Boolean, Enum, Integer, JSON
+from sqlalchemy import Column, String, Text, ForeignKey, DateTime, Boolean, Enum, Integer, JSON, Index
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 from core.database import Base
 from modules.auth.domain.models import AccessLevel
+from core.config import settings
 
 class DocumentStatus(str, enum.Enum):
     PENDING = "PENDING"
@@ -67,6 +69,35 @@ class EnterpriseDocument(Base):
     error_message = Column(Text, nullable=True)
     chunk_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
+
+class DocumentChunk(Base):
+    """
+    Relational storage for individual text chunks and their embedding vectors (pgvector).
+    Provides dual-persistence, relational search, and disaster recovery for Qdrant.
+    """
+    __tablename__ = "document_chunks"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id = Column(String(36), ForeignKey("enterprise_documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    org_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    department_id = Column(String(36), nullable=True, index=True)
+    uploader_id = Column(String(36), nullable=True)
+    access_level = Column(String(50), nullable=False, default="DEPARTMENT")
+    chunk_index = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    embedding = Column(Vector(settings.EMBEDDING_DIMENSION), nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    document = relationship("EnterpriseDocument", back_populates="chunks")
+
+    __table_args__ = (
+        Index("ix_doc_chunks_org_dept", "org_id", "department_id"),
+        Index("ix_doc_chunks_doc_idx", "document_id", "chunk_index"),
+    )
+
 
 class IngestionJob(Base):
     __tablename__ = "ingestion_jobs"

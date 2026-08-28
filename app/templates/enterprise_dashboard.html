@@ -222,6 +222,7 @@
             <button class="tab-btn" onclick="switchTab('tab-personas', this)">🎭 Assistant Personas</button>
             <button class="tab-btn" onclick="switchTab('tab-prompts', this)">📝 Prompt Templates</button>
             <button class="tab-btn" onclick="switchTab('tab-jobs', this)">⚙️ Connector Jobs</button>
+            <button class="tab-btn" onclick="switchTab('tab-indexes', this)">⚡ Vector Indexes & Storage</button>
             <button class="tab-btn" onclick="switchTab('tab-siem', this)">🛡️ SIEM Audit Trail</button>
         </div>
 
@@ -232,6 +233,7 @@
         {% include "components/tables/personas_table.html" %}
         {% include "components/tables/prompts_table.html" %}
         {% include "components/tables/jobs_table.html" %}
+        {% include "components/tables/indexes_panel.html" %}
         {% include "components/tables/siem_panel.html" %}
 
     </main>
@@ -251,6 +253,103 @@
 <script>
     let cachedDepartments = [];
     let siemPollInterval = null;
+
+    
+    // --- Vector Storage Telemetry & Optimization ---
+    async function fetchIndexStats() {
+        try {
+            const stats = await fetchAPI('/enterprise/indexes/stats');
+            if (stats) {
+                const qdrantEl = document.getElementById('telemetry-qdrant-points');
+                const pgEl = document.getElementById('telemetry-pg-chunks');
+                const collEl = document.getElementById('telemetry-collection-name');
+                
+                if (qdrantEl && stats.qdrant) qdrantEl.textContent = Number(stats.qdrant.points_count || 0).toLocaleString();
+                if (pgEl && stats.relational_store) pgEl.textContent = Number(stats.relational_store.total_relational_chunks_count || 0).toLocaleString();
+                if (collEl && stats.qdrant) collEl.textContent = stats.qdrant.collection_name || 'sevenwings_rag_vectors';
+            }
+        } catch (e) {
+            console.error("Failed to load vector telemetry stats", e);
+        }
+    }
+
+    async function handleOptimizeIndexes() {
+        const btn = document.getElementById('btn-optimize-indexes');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-sm" style="display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:4px;"></span> Optimizing...';
+        }
+        try {
+            const res = await fetchAPI('/enterprise/indexes/optimize', { method: 'POST' });
+            if (res) {
+                Toast.success("Indexes Optimized", res.message || "Vector collection and payload indexes verified.");
+                await fetchIndexStats();
+            }
+        } catch (e) {
+            Toast.error("Optimization Failed", e.message || "Could not optimize vector store.");
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<span>⚡ Optimize Vector Indexes</span>';
+            }
+        }
+    }
+
+    async function handleReindexDocument(docId, filename) {
+        const confirmed = await Modal.confirm(
+            'Re-index Knowledge Document',
+            `Are you sure you want to re-index "${filename}"?\n\nThis will purge existing vector points from Qdrant and relational chunks from PostgreSQL, then re-embed and index fresh chunks.`
+        );
+        if (!confirmed) return;
+
+        const statusEl = document.getElementById(`doc-status-${docId}`);
+        if (statusEl) {
+            statusEl.className = 'badge badge-warning';
+            statusEl.innerHTML = '<span class="spinner-sm" style="display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:4px;"></span> PROCESSING';
+        }
+
+        try {
+            const res = await fetchAPI(`/enterprise/documents/${docId}/reindex`, { method: 'POST' });
+            if (res) {
+                Toast.info('Re-indexing Started', `"${filename}" is being re-indexed into vector memory.`);
+                pollDocumentStatus(docId, filename);
+            }
+        } catch (e) {
+            Toast.error('Re-indexing Failed', e.message || 'Could not queue document re-index.');
+        }
+    }
+
+    function pollDocumentStatus(docId, filename, attempts = 0) {
+        if (attempts > 30) return;
+        setTimeout(async () => {
+            try {
+                const statusData = await fetchAPI(`/enterprise/documents/${docId}/status`);
+                if (statusData) {
+                    const statusEl = document.getElementById(`doc-status-${docId}`);
+                    const chunksEl = document.getElementById(`doc-chunks-${docId}`);
+                    if (statusData.status === 'INDEXED') {
+                        if (statusEl) {
+                            statusEl.className = 'badge badge-success';
+                            statusEl.textContent = 'INDEXED';
+                        }
+                        if (chunksEl) chunksEl.textContent = statusData.chunk_count || 0;
+                        Toast.success('Re-indexing Complete', `"${filename}" successfully indexed (${statusData.chunk_count || 0} chunks).`);
+                        fetchIndexStats();
+                    } else if (statusData.status === 'FAILED') {
+                        if (statusEl) {
+                            statusEl.className = 'badge badge-danger';
+                            statusEl.textContent = 'FAILED';
+                        }
+                        Toast.error('Re-indexing Failed', statusData.error_message || 'Indexing failed.');
+                    } else {
+                        pollDocumentStatus(docId, filename, attempts + 1);
+                    }
+                }
+            } catch (e) {
+                console.error("Status poll error", e);
+            }
+        }, 1500);
+    }
 
     // --- Modal Controls ---
     function openModal(modalId) {
@@ -397,6 +496,7 @@
                 }
             }
 
+            fetchIndexStats();
             // 4. Fetch Documents
             const docs = await fetchAPI('/enterprise/documents');
             if (docs) {
@@ -412,18 +512,34 @@
                         if (doc.access_level === 'RESTRICTED') aclBadgeClass = 'badge-acl-restricted';
 
                         const deptName = cachedDepartments.find(d => d.id === doc.department_id)?.name || 'General';
+                        
+                        let statusBadge = `<span class="badge badge-success" id="doc-status-${doc.id}">INDEXED</span>`;
+                        if (doc.status === 'PROCESSING') {
+                            statusBadge = `<span class="badge badge-warning" id="doc-status-${doc.id}"><span class="spinner-sm" style="display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:4px;"></span> PROCESSING</span>`;
+                        } else if (doc.status === 'PENDING') {
+                            statusBadge = `<span class="badge badge-warning" id="doc-status-${doc.id}">PENDING</span>`;
+                        } else if (doc.status === 'FAILED') {
+                            statusBadge = `<span class="badge badge-danger" id="doc-status-${doc.id}" title="${escapeHTML(doc.error_message || '')}">FAILED</span>`;
+                        }
+
                         rowsHtml += `
                             <tr>
                                 <td><strong>${escapeHTML(doc.filename)}</strong></td>
                                 <td><span class="badge ${aclBadgeClass}">${escapeHTML(doc.access_level)}</span></td>
                                 <td>${escapeHTML(deptName)}</td>
-                                <td><span class="badge badge-acl-public">${escapeHTML(doc.status)}</span></td>
+                                <td>${statusBadge}</td>
+                                <td><strong id="doc-chunks-${doc.id}">${doc.chunk_count || 0}</strong> chunks</td>
                                 <td>${formatBytes(doc.size_bytes)}</td>
                                 <td>${formatDate(doc.created_at)}</td>
                                 <td>
-                                    <button type="button" class="btn btn-danger btn-sm" onclick="handleDeleteDocument('${doc.id}', '${escapeHTML(doc.filename)}')" title="Purge document & vectors">
-                                        🗑️ Delete
-                                    </button>
+                                    <div class="flex items-center gap-1">
+                                        <button type="button" class="btn btn-outline btn-sm" onclick="handleReindexDocument('${doc.id}', '${escapeHTML(doc.filename)}')" title="Purge and re-index vector chunks">
+                                            🔄 Re-index
+                                        </button>
+                                        <button type="button" class="btn btn-danger btn-sm" onclick="handleDeleteDocument('${doc.id}', '${escapeHTML(doc.filename)}')" title="Purge document & vectors">
+                                            🗑️
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         `;

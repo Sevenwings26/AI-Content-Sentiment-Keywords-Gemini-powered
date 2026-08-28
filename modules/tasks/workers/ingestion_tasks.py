@@ -48,7 +48,8 @@ def async_ingest_document_task(
             uploader_id=uploader_id,
             access_level=access_level,
             session_id=session_id,
-            mime_type=mime_type
+            mime_type=mime_type,
+            db=db
         )
 
         DocumentRepository.update_document_status(
@@ -97,7 +98,8 @@ def async_execute_ingestion_job_task(job_id: str):
                 department_id=job.department_id,
                 uploader_id=job.created_by_id or "system_admin",
                 access_level=job.access_level.value if hasattr(job.access_level, "value") else str(job.access_level),
-                mime_type=raw_doc.mime_type
+                mime_type=raw_doc.mime_type,
+                db=db
             )
             processed_count += 1
 

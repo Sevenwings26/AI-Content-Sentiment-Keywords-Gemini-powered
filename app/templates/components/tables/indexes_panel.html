@@ -1,0 +1,51 @@
+<!-- app/templates/components/tables/indexes_panel.html -->
+<div id="tab-indexes" class="tab-content">
+    <div class="table-container" style="margin-bottom: 24px;">
+        <div class="flex items-center justify-between" style="padding: 20px 24px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 12px;">
+            <div>
+                <h2 style="font-size: 16px; font-weight: 600;">⚡ High-Performance Vector Storage & Index Telemetry</h2>
+                <p class="text-sm text-secondary" style="margin-top: 2px;">Real-time dual-storage health: Qdrant In-Memory HNSW Search + PostgreSQL pgvector Relational Chunks</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-optimize-indexes" onclick="handleOptimizeIndexes()">
+                <span>⚡ Optimize Vector Indexes</span>
+            </button>
+        </div>
+
+        <div style="padding: 24px;">
+            <div class="metrics-grid" style="margin-bottom: 24px;">
+                <div class="metric-card" style="border-left: 4px solid var(--accent-primary, #6366f1);">
+                    <div class="metric-title">Qdrant In-Memory Vectors</div>
+                    <div class="metric-value" id="telemetry-qdrant-points">--</div>
+                    <div class="text-xs text-secondary" style="margin-top: 4px;">Collection: <span id="telemetry-collection-name">--</span></div>
+                </div>
+                <div class="metric-card" style="border-left: 4px solid #10b981;">
+                    <div class="metric-title">pgvector Relational Chunks</div>
+                    <div class="metric-value" id="telemetry-pg-chunks">--</div>
+                    <div class="text-xs text-secondary" style="margin-top: 4px;">ACID Source of Truth</div>
+                </div>
+                <div class="metric-card" style="border-left: 4px solid #f59e0b;">
+                    <div class="metric-title">Vector Search Tuning</div>
+                    <div class="metric-value" style="font-size: 20px; font-family: monospace;">HNSW ef=64</div>
+                    <div class="text-xs text-secondary" style="margin-top: 4px;">Sub-30ms Query Target</div>
+                </div>
+                <div class="metric-card" style="border-left: 4px solid #8b5cf6;">
+                    <div class="metric-title">Vector Dimension</div>
+                    <div class="metric-value" style="font-size: 20px; font-family: monospace;">1024 Dim</div>
+                    <div class="text-xs text-secondary" style="margin-top: 4px;">Cosine Similarity Metric</div>
+                </div>
+            </div>
+
+            <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px;">
+                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Payload Keyword Indexes (Fast Tenant & Department Filtering)</h3>
+                <div class="flex items-center gap-2" style="flex-wrap: wrap;">
+                    <span class="badge badge-success">✓ org_id (Tenant Isolation)</span>
+                    <span class="badge badge-success">✓ department_id (RBAC)</span>
+                    <span class="badge badge-success">✓ access_level (Security ACL)</span>
+                    <span class="badge badge-success">✓ uploader_id (Auditing)</span>
+                    <span class="badge badge-success">✓ session_id (Conversational RAG)</span>
+                    <span class="badge badge-success">✓ document_id (Cascading Prune)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

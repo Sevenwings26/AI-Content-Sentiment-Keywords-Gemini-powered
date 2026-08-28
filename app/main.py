@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.config import settings
-from app.routes import auth, chat, documents, governance, jobs, audit, views
+from app.routes import auth, chat, documents, governance, jobs, audit, views, indexes
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -35,6 +35,7 @@ app.include_router(documents.router)
 app.include_router(governance.router)
 app.include_router(jobs.router)
 app.include_router(audit.router)
+app.include_router(indexes.router)
 
 # Register UI View Routers last
 app.include_router(views.router)

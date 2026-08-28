@@ -817,7 +817,18 @@
                 promoteSessionIfNeeded(data.session_id, data.session_title);
             }
             appendFilePill(file.name, data.document_id);
-            Toast.success("Document Indexed", `"${file.name}" is now accessible for grounded queries.`);
+            
+            if (data.document_id) {
+                try {
+                    const statusRes = await fetchAPI(`/documents/${data.document_id}/status`);
+                    const chunkCount = statusRes?.chunk_count || 0;
+                    Toast.success("Document Indexed", `"${file.name}" indexed successfully into vector memory (${chunkCount} chunks).`);
+                } catch (e) {
+                    Toast.success("Document Indexed", `"${file.name}" is now accessible for grounded queries.`);
+                }
+            } else {
+                Toast.success("Document Indexed", `"${file.name}" is now accessible for grounded queries.`);
+            }
 
         } catch (err) {
             Toast.error("Ingestion Failed", err.message || "Failed to parse document.");
