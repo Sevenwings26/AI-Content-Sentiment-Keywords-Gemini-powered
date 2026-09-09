@@ -14,13 +14,17 @@ class QueryPlanner:
         r"^\s*(how are you|how's it going|what's up)\b"
     ]
 
-    GENERAL_KNOWLEDGE_PATTERNS = [
-        r"^(how many|what is the capital of|who wrote|when was|translate|calculate|write a|code a|explain the concept of)\b",
-        r"\b(continents?|planets?|oceans?|countries|pythagorean|fibonacci|javascript|python|css|html)\b"
+    STRUCTURED_SQL_KEYWORDS = [
+        r"\b(how many|total|sum|count|average|highest|lowest|minimum|maximum|min|max|revenue|invoices?|orders?|records?|salary|salaries|database|rows?|tables?|aggregate|metrics?)\b"
     ]
 
     DOCUMENT_RAG_KEYWORDS = [
         r"\b(policy|policies|document|documents|file|files|uploaded|pdf|handbook|manual|contract|procedure|agreement|revenue|q[1-4]|report|internal|nda|org|department|guideline|compliance|sop)\b"
+    ]
+
+    GENERAL_KNOWLEDGE_PATTERNS = [
+        r"^\s*(what is the capital of|who wrote|when was|translate|calculate|write a|code a|explain the concept of)\b",
+        r"\b(continents?|planets?|oceans?|countries|pythagorean|fibonacci|javascript|python|css|html)\b"
     ]
 
     @classmethod
@@ -34,20 +38,25 @@ class QueryPlanner:
         clean_query = query.strip()
         lower_query = clean_query.lower()
 
+        # Check for structured SQL intention
+        is_sql_intent = any(re.search(p, lower_query) for p in cls.STRUCTURED_SQL_KEYWORDS)
+
         # 1. Explicit Mode Override
         if mode == "general":
             return QueryPlan(
                 is_conversational_only=True,
                 target_scopes=[],
                 sub_queries=[clean_query],
-                intent_category="CONVERSATIONAL"
+                intent_category="CONVERSATIONAL",
+                is_structured_sql=False
             )
         elif mode == "rag":
             return QueryPlan(
                 is_conversational_only=False,
                 target_scopes=["personal", "department", "enterprise"],
                 sub_queries=[clean_query],
-                intent_category="DOCUMENT_RAG"
+                intent_category="STRUCTURED_SQL" if is_sql_intent else "DOCUMENT_RAG",
+                is_structured_sql=is_sql_intent
             )
 
         # 2. Dynamic Auto-Routing:
@@ -58,42 +67,57 @@ class QueryPlanner:
                     is_conversational_only=True,
                     target_scopes=[],
                     sub_queries=[clean_query],
-                    intent_category="CONVERSATIONAL"
+                    intent_category="CONVERSATIONAL",
+                    is_structured_sql=False
                 )
 
-        # B. Document-referencing keywords -> Prioritize RAG
+        # B. Structured SQL / Tabular Queries
+        if is_sql_intent:
+            return QueryPlan(
+                is_conversational_only=False,
+                target_scopes=["personal", "department", "enterprise"],
+                sub_queries=[clean_query],
+                intent_category="STRUCTURED_SQL",
+                is_structured_sql=True
+            )
+
+        # C. Document-referencing keywords -> Prioritize RAG
         for pattern in cls.DOCUMENT_RAG_KEYWORDS:
             if re.search(pattern, lower_query):
                 return QueryPlan(
                     is_conversational_only=False,
                     target_scopes=["personal", "department", "enterprise"],
                     sub_queries=[clean_query],
-                    intent_category="DOCUMENT_RAG"
+                    intent_category="DOCUMENT_RAG",
+                    is_structured_sql=False
                 )
 
-        # C. If session has uploaded files attached -> Route to RAG
+        # D. If session has uploaded files attached -> Route to RAG
         if has_session_documents:
             return QueryPlan(
                 is_conversational_only=False,
                 target_scopes=["personal", "department", "enterprise"],
                 sub_queries=[clean_query],
-                intent_category="DOCUMENT_RAG"
+                intent_category="DOCUMENT_RAG",
+                is_structured_sql=False
             )
 
-        # D. General world knowledge pattern check
+        # E. General world knowledge pattern check
         for pattern in cls.GENERAL_KNOWLEDGE_PATTERNS:
             if re.search(pattern, lower_query):
                 return QueryPlan(
                     is_conversational_only=True,
                     target_scopes=[],
                     sub_queries=[clean_query],
-                    intent_category="GENERAL_KNOWLEDGE"
+                    intent_category="GENERAL_KNOWLEDGE",
+                    is_structured_sql=False
                 )
 
-        # Default fallback: Route to RAG with graceful general fallback if no documents match
+        # Default fallback: Route to RAG
         return QueryPlan(
             is_conversational_only=False,
             target_scopes=["personal", "department", "enterprise"],
             sub_queries=[clean_query],
-            intent_category="DOCUMENT_RAG"
+            intent_category="DOCUMENT_RAG",
+            is_structured_sql=False
         )

@@ -20,4 +20,4 @@ class QueryPlan:
     target_scopes: List[str]
     sub_queries: List[str]
     intent_category: str
-
+    is_structured_sql: bool = False

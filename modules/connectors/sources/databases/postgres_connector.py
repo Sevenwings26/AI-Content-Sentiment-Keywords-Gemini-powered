@@ -4,15 +4,14 @@ from modules.connectors.sources.databases.base_db_connector import BaseDatabaseC
 
 class PostgreSQLConnector(BaseDatabaseConnector):
     """
-    Hardened Production PostgreSQL Connector.
+    Hardened Production Postgresql Connector.
     Enforces AST SQL query validation, SSRF target validation, and read-only transactions.
     """
     def __init__(self, connection_config: Dict[str, Any]):
         super().__init__(
             connection_config=connection_config,
             dialect="postgresql",
-            source_type="POSTGRES_DB",
-            default_query="SELECT id, title, content FROM documents"
+            source_type="POSTGRES_DB"
         )
 
     def get_version_query(self) -> str:
@@ -20,4 +19,3 @@ class PostgreSQLConnector(BaseDatabaseConnector):
 
 # Backwards-compatibility alias
 RelationalDBConnector = PostgreSQLConnector
-

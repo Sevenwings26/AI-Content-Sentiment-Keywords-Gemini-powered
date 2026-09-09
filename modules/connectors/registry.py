@@ -1,4 +1,5 @@
 # modules/connectors/registry.py
+"""Connector Registry and Factory for Enterprise Data Connectors"""
 import logging
 from typing import Dict, Any, List, Type, Optional
 from modules.connectors.base import BaseConnector
@@ -22,7 +23,6 @@ from modules.connectors.sources.notion_connector import NotionConnector
 from modules.connectors.sources.confluence_connector import ConfluenceConnector
 from modules.connectors.sources.s3_connector import S3Connector
 
-
 logger = logging.getLogger("connector_registry")
 
 class ConnectorRegistry:
@@ -36,68 +36,72 @@ class ConnectorRegistry:
                 source_type="POSTGRES_DB",
                 name="PostgreSQL Database",
                 category=ConnectorCategory.DATABASES,
-                description="Sync documents and table records from PostgreSQL 11+ databases",
+                description="Auto-reflect schemas for live Text-to-SQL or extract records from PostgreSQL 11+",
                 icon="🐘",
                 fields=[
-                    ConnectorFieldMeta(name="host", title="Database Host", placeholder="localhost or db.internal", default_value="localhost"),
-                    ConnectorFieldMeta(name="port", title="Port", field_type=FieldType.NUMBER, default_value=5432),
-                    ConnectorFieldMeta(name="database", title="Database Name", placeholder="knowledge_db"),
-                    ConnectorFieldMeta(name="username", title="Username", placeholder="postgres"),
-                    ConnectorFieldMeta(name="password", title="Password", field_type=FieldType.PASSWORD, is_secret=True),
-                    ConnectorFieldMeta(name="sql_query", title="Extraction SQL Query", field_type=FieldType.TEXTAREA, default_value="SELECT id, title, content FROM documents", description="SQL query returning rows to ingest"),
-                    ConnectorFieldMeta(name="text_column", title="Text Column Name", default_value="content"),
-                    ConnectorFieldMeta(name="filename_column", title="Filename / ID Column", default_value="id")
+                    ConnectorFieldMeta(name="host", title="Database Host", placeholder="localhost or db.internal", default_value="localhost", required=True),
+                    ConnectorFieldMeta(name="port", title="Port", field_type=FieldType.NUMBER, default_value=5432, required=True),
+                    ConnectorFieldMeta(name="database", title="Database Name", placeholder="knowledge_db", required=True),
+                    ConnectorFieldMeta(name="username", title="Username", placeholder="postgres", required=True),
+                    ConnectorFieldMeta(name="password", title="Password", field_type=FieldType.PASSWORD, is_secret=True, required=True),
+                    ConnectorFieldMeta(name="table_name", title="Target Table Name (Optional)", placeholder="Leave blank to auto-reflect all tables", required=False, description="Leave blank for Auto Schema Reflection & Text-to-SQL, or specify a table name"),
+                    ConnectorFieldMeta(name="sql_query", title="Custom Extraction SQL (Optional)", field_type=FieldType.TEXTAREA, placeholder="e.g. SELECT id, title, content FROM documents", required=False, description="Optional custom query for row-level vectorization"),
+                    ConnectorFieldMeta(name="text_column", title="Text Column (Optional)", placeholder="content", required=False, description="Optional column containing text to embed"),
+                    ConnectorFieldMeta(name="filename_column", title="Filename / ID Column (Optional)", placeholder="id", required=False)
                 ]
             ),
             ConnectorDescriptor(
                 source_type="MYSQL_DB",
                 name="MySQL Knowledge Source",
                 category=ConnectorCategory.DATABASES,
-                description="Ingest content and records from MySQL 8 / MariaDB databases",
+                description="Auto-reflect schemas for live Text-to-SQL or ingest from MySQL 8 / MariaDB",
                 icon="🐬",
                 fields=[
-                    ConnectorFieldMeta(name="host", title="MySQL Host", placeholder="localhost", default_value="localhost"),
-                    ConnectorFieldMeta(name="port", title="Port", field_type=FieldType.NUMBER, default_value=3306),
-                    ConnectorFieldMeta(name="database", title="Database Name", placeholder="articles_db"),
-                    ConnectorFieldMeta(name="username", title="Username", placeholder="root"),
-                    ConnectorFieldMeta(name="password", title="Password", field_type=FieldType.PASSWORD, is_secret=True),
-                    ConnectorFieldMeta(name="sql_query", title="Extraction SQL Query", field_type=FieldType.TEXTAREA, default_value="SELECT id, title, content FROM articles"),
-                    ConnectorFieldMeta(name="text_column", title="Text Column Name", default_value="content"),
-                    ConnectorFieldMeta(name="filename_column", title="Filename / ID Column", default_value="id")
+                    ConnectorFieldMeta(name="host", title="MySQL Host", placeholder="localhost", default_value="localhost", required=True),
+                    ConnectorFieldMeta(name="port", title="Port", field_type=FieldType.NUMBER, default_value=3306, required=True),
+                    ConnectorFieldMeta(name="database", title="Database Name", placeholder="articles_db", required=True),
+                    ConnectorFieldMeta(name="username", title="Username", placeholder="root", required=True),
+                    ConnectorFieldMeta(name="password", title="Password", field_type=FieldType.PASSWORD, is_secret=True, required=True),
+                    ConnectorFieldMeta(name="table_name", title="Target Table Name (Optional)", placeholder="Leave blank to auto-reflect all tables", required=False, description="Leave blank for Auto Schema Reflection & Text-to-SQL"),
+                    ConnectorFieldMeta(name="sql_query", title="Custom Extraction SQL (Optional)", field_type=FieldType.TEXTAREA, placeholder="e.g. SELECT id, title, content FROM articles", required=False, description="Optional custom query for row-level vectorization"),
+                    ConnectorFieldMeta(name="text_column", title="Text Column (Optional)", placeholder="content", required=False),
+                    ConnectorFieldMeta(name="filename_column", title="Filename / ID Column (Optional)", placeholder="id", required=False)
                 ]
             ),
             ConnectorDescriptor(
                 source_type="ORACLE_DB",
                 name="Oracle Database Source",
                 category=ConnectorCategory.DATABASES,
-                description="Sync enterprise records from Oracle 19c/21c databases",
+                description="Auto-reflect schemas or sync enterprise records from Oracle 19c/21c",
                 icon="🏛️",
                 fields=[
-                    ConnectorFieldMeta(name="host", title="Oracle Host", placeholder="oracle-server.internal", default_value="localhost"),
-                    ConnectorFieldMeta(name="port", title="Port", field_type=FieldType.NUMBER, default_value=1521),
-                    ConnectorFieldMeta(name="service_name", title="Service Name / SID", default_value="ORCLPDB1"),
-                    ConnectorFieldMeta(name="username", title="Database User", placeholder="system"),
-                    ConnectorFieldMeta(name="password", title="Password", field_type=FieldType.PASSWORD, is_secret=True),
-                    ConnectorFieldMeta(name="sql_query", title="Extraction SQL Query", field_type=FieldType.TEXTAREA, default_value="SELECT id, title, content FROM enterprise_docs"),
-                    ConnectorFieldMeta(name="text_column", title="Text Column Name", default_value="content"),
-                    ConnectorFieldMeta(name="filename_column", title="Filename Column Name", default_value="id")
+                    ConnectorFieldMeta(name="host", title="Oracle Host", placeholder="oracle-server.internal", default_value="localhost", required=True),
+                    ConnectorFieldMeta(name="port", title="Port", field_type=FieldType.NUMBER, default_value=1521, required=True),
+                    ConnectorFieldMeta(name="service_name", title="Service Name / SID", default_value="ORCLPDB1", required=True),
+                    ConnectorFieldMeta(name="username", title="Database User", placeholder="system", required=True),
+                    ConnectorFieldMeta(name="password", title="Password", field_type=FieldType.PASSWORD, is_secret=True, required=True),
+                    ConnectorFieldMeta(name="table_name", title="Target Table Name (Optional)", placeholder="Leave blank to auto-reflect all tables", required=False, description="Leave blank for Auto Schema Reflection & Text-to-SQL"),
+                    ConnectorFieldMeta(name="sql_query", title="Custom Extraction SQL (Optional)", field_type=FieldType.TEXTAREA, placeholder="e.g. SELECT id, title, content FROM enterprise_docs", required=False),
+                    ConnectorFieldMeta(name="text_column", title="Text Column (Optional)", placeholder="content", required=False),
+                    ConnectorFieldMeta(name="filename_column", title="Filename Column (Optional)", placeholder="id", required=False)
                 ]
             ),
             ConnectorDescriptor(
                 source_type="MSSQL_DB",
                 name="Microsoft SQL Server (MSSQL)",
                 category=ConnectorCategory.DATABASES,
-                description="Ingest data from MSSQL and Azure SQL Databases",
+                description="Auto-reflect schemas or ingest data from MSSQL and Azure SQL",
                 icon="🗄️",
                 fields=[
-                    ConnectorFieldMeta(name="host", title="SQL Server Host", placeholder="mssql.internal", default_value="localhost"),
-                    ConnectorFieldMeta(name="port", title="Port", field_type=FieldType.NUMBER, default_value=1433),
-                    ConnectorFieldMeta(name="database", title="Database Name", placeholder="CorporateKB"),
-                    ConnectorFieldMeta(name="username", title="SQL User", placeholder="sa"),
-                    ConnectorFieldMeta(name="password", title="Password", field_type=FieldType.PASSWORD, is_secret=True),
-                    ConnectorFieldMeta(name="sql_query", title="Extraction SQL Query", field_type=FieldType.TEXTAREA, default_value="SELECT id, title, body FROM KnowledgeArticles"),
-                    ConnectorFieldMeta(name="text_column", title="Text Column", default_value="body"),
-                    ConnectorFieldMeta(name="filename_column", title="Filename Column", default_value="id")
+                    ConnectorFieldMeta(name="host", title="SQL Server Host", placeholder="mssql.internal", default_value="localhost", required=True),
+                    ConnectorFieldMeta(name="port", title="Port", field_type=FieldType.NUMBER, default_value=1433, required=True),
+                    ConnectorFieldMeta(name="database", title="Database Name", placeholder="CorporateKB", required=True),
+                    ConnectorFieldMeta(name="username", title="SQL User", placeholder="sa", required=True),
+                    ConnectorFieldMeta(name="password", title="Password", field_type=FieldType.PASSWORD, is_secret=True, required=True),
+                    ConnectorFieldMeta(name="table_name", title="Target Table Name (Optional)", placeholder="Leave blank to auto-reflect all tables", required=False, description="Leave blank for Auto Schema Reflection & Text-to-SQL"),
+                    ConnectorFieldMeta(name="sql_query", title="Custom Extraction SQL (Optional)", field_type=FieldType.TEXTAREA, placeholder="e.g. SELECT id, title, body FROM KnowledgeArticles", required=False),
+                    ConnectorFieldMeta(name="text_column", title="Text Column (Optional)", placeholder="body", required=False),
+                    ConnectorFieldMeta(name="filename_column", title="Filename Column (Optional)", placeholder="id", required=False)
                 ]
             ),
             # --- Cloud & File Storage ---
@@ -108,8 +112,8 @@ class ConnectorRegistry:
                 description="Sync PDFs, Office docs, and markdown from AWS S3 or MinIO",
                 icon="🪣",
                 fields=[
-                    ConnectorFieldMeta(name="bucket_name", title="S3 Bucket Name", placeholder="corporate-knowledge"),
-                    ConnectorFieldMeta(name="region_name", title="AWS Region", default_value="us-east-1", placeholder="us-east-1"),
+                    ConnectorFieldMeta(name="bucket_name", title="S3 Bucket Name", placeholder="corporate-knowledge", required=True),
+                    ConnectorFieldMeta(name="region_name", title="AWS Region", default_value="us-east-1", placeholder="us-east-1", required=True),
                     ConnectorFieldMeta(name="prefix", title="Folder Prefix", placeholder="docs/", required=False),
                     ConnectorFieldMeta(name="aws_access_key_id", title="Access Key ID", placeholder="AKIA... (leave empty if using IAM Role)", required=False),
                     ConnectorFieldMeta(name="aws_secret_access_key", title="Secret Access Key", field_type=FieldType.PASSWORD, is_secret=True, required=False),
@@ -123,7 +127,7 @@ class ConnectorRegistry:
                 description="Ingest documents, sheets, and folders from Google Drive",
                 icon="📁",
                 fields=[
-                    ConnectorFieldMeta(name="service_account_json", title="Google Service Account JSON", field_type=FieldType.TEXTAREA, is_secret=True, placeholder='{"type": "service_account", ...}'),
+                    ConnectorFieldMeta(name="service_account_json", title="Google Service Account JSON", field_type=FieldType.TEXTAREA, is_secret=True, placeholder='{"type": "service_account", ...}', required=True),
                     ConnectorFieldMeta(name="folder_id", title="Target Folder ID", placeholder="1abycz... (blank for Root)", required=False),
                     ConnectorFieldMeta(name="include_shared_drives", title="Include Shared Team Drives", field_type=FieldType.BOOLEAN, default_value=True, required=False)
                 ]
@@ -135,10 +139,10 @@ class ConnectorRegistry:
                 description="Sync document libraries via Microsoft Graph API",
                 icon="🏢",
                 fields=[
-                    ConnectorFieldMeta(name="tenant_id", title="Azure AD Tenant ID", placeholder="xxxx-xxxx-xxxx"),
-                    ConnectorFieldMeta(name="client_id", title="Application (Client) ID", placeholder="yyyy-yyyy-yyyy"),
-                    ConnectorFieldMeta(name="client_secret", title="Client Secret Value", field_type=FieldType.PASSWORD, is_secret=True),
-                    ConnectorFieldMeta(name="site_url", title="SharePoint Site URL", placeholder="https://company.sharepoint.com/sites/knowledge"),
+                    ConnectorFieldMeta(name="tenant_id", title="Azure AD Tenant ID", placeholder="xxxx-xxxx-xxxx", required=True),
+                    ConnectorFieldMeta(name="client_id", title="Application (Client) ID", placeholder="yyyy-yyyy-yyyy", required=True),
+                    ConnectorFieldMeta(name="client_secret", title="Client Secret Value", field_type=FieldType.PASSWORD, is_secret=True, required=True),
+                    ConnectorFieldMeta(name="site_url", title="SharePoint Site URL", placeholder="https://company.sharepoint.com/sites/knowledge", required=True),
                     ConnectorFieldMeta(name="folder_path", title="Document Library Folder", default_value="/Shared Documents", required=False)
                 ]
             ),
@@ -150,10 +154,10 @@ class ConnectorRegistry:
                 description="Sync technical wikis, runbooks, and policies from Confluence",
                 icon="📘",
                 fields=[
-                    ConnectorFieldMeta(name="base_url", title="Confluence Base URL", placeholder="https://company.atlassian.net/wiki"),
-                    ConnectorFieldMeta(name="space_key", title="Space Key", placeholder="ENG"),
-                    ConnectorFieldMeta(name="user_email", title="Atlassian User Email", placeholder="admin@company.com"),
-                    ConnectorFieldMeta(name="api_token", title="API Token", field_type=FieldType.PASSWORD, is_secret=True)
+                    ConnectorFieldMeta(name="base_url", title="Confluence Base URL", placeholder="https://company.atlassian.net/wiki", required=True),
+                    ConnectorFieldMeta(name="space_key", title="Space Key", placeholder="ENG", required=True),
+                    ConnectorFieldMeta(name="user_email", title="Atlassian User Email", placeholder="admin@company.com", required=True),
+                    ConnectorFieldMeta(name="api_token", title="API Token", field_type=FieldType.PASSWORD, is_secret=True, required=True)
                 ]
             ),
             ConnectorDescriptor(
@@ -163,12 +167,11 @@ class ConnectorRegistry:
                 description="Ingest Notion databases, project docs, and pages",
                 icon="📓",
                 fields=[
-                    ConnectorFieldMeta(name="api_token", title="Integration Token (secret_...)", field_type=FieldType.PASSWORD, is_secret=True, placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxxx"),
+                    ConnectorFieldMeta(name="api_token", title="Integration Token (secret_...)", field_type=FieldType.PASSWORD, is_secret=True, placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxxx", required=True),
                     ConnectorFieldMeta(name="database_id", title="Database / Page ID", placeholder="xxxx-xxxx-xxxx", required=False)
                 ]
             )
         ]
-
 
     @staticmethod
     def get_connector(source_type: str, connection_config: Dict[str, Any]) -> BaseConnector:

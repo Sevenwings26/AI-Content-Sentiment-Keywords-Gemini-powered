@@ -1,29 +1,45 @@
 services:
-  # 1. Qdrant Vector Database Service
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: wings#123
+      POSTGRES_DB: wings_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wings_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant_vector_db
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "6335:6333"
+      - "6336:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     restart: always
 
-  # 2. Redis Task Broker & Result Store
   redis:
     image: redis:7-alpine
     container_name: redis_broker
     ports:
-      - "6379:6379"
+      - "6380:6379"
     restart: always
 
-  # 3. FastAPI Application Service
   wings_retrival_ai:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wings_retrival_ai
+    working_dir: /app
     ports:
       - "4500:4500"
     volumes:
@@ -36,16 +52,20 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - qdrant
-      - redis
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_started
     restart: always
 
-  # 4. Asynchronous Ingestion Worker Service
   wings_ingestion_worker:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wings_ingestion_worker
+    working_dir: /app
     volumes:
       - .:/app
     environment:
@@ -56,9 +76,17 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - qdrant
-      - redis
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_started
     restart: always
 
 volumes:
   qdrant_data:
+  postgres_data:
+
+
+
