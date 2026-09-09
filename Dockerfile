@@ -24,3 +24,4 @@ EXPOSE 4500
 # Start Uvicorn pointing to your app entrypoint
 CMD ["python", "-m", "uvicorn", "app.main:app", "--app-dir", "/app", "--host", "0.0.0.0", "--port", "4500"]
 
+

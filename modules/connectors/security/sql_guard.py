@@ -36,6 +36,7 @@ SUPPORTED_DB_SCHEMES = {
     "mysql": {"mysql", "mysql+pymysql", "mysql+mysqldb"},
     "oracle": {"oracle", "oracle+oracledb", "oracle+cx_oracle"},
     "mssql": {"mssql", "mssql+pyodbc", "mssql+pymssql"},
+    "sqlite": {"sqlite", "sqlite3"},
 }
 
 _DIALECT_ALIASES = {
@@ -46,6 +47,7 @@ _DIALECT_ALIASES = {
     "oracle": "oracle",
     "mssql": "mssql",
     "sqlserver": "mssql",
+    "sqlite": "sqlite",
 }
 
 _FORBIDDEN_KEYWORDS = {
@@ -207,6 +209,8 @@ class SQLSecurityGuard:
         Fails closed on DNS errors or unallowlisted private addresses.
         """
         canonical = cls.canonical_dialect(dialect)
+        if canonical == "sqlite":
+            return ("localhost", ("127.0.0.1",))
         parsed = urlsplit(db_url)
         host = (parsed.hostname or "").rstrip(".").lower()
 
